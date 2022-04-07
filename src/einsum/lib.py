@@ -1,5 +1,6 @@
 from dataclasses import dataclass
 from typing import List, Tuple, Dict, Optional
+import torch
 
 Shape = Tuple[int,...]
 Idxs = List[int]
@@ -194,6 +195,13 @@ def einsum_spec(equation: str, input_shapes: List[Shape], output_shape: Shape) -
     output_spec = einsum_output_spec(idxs_map, input_specs, output_formula, output_shape)
     return EinsumSpec(idxs_map, input_specs, output_spec)
 
+def einsum_execute(spec: EinsumSpec, inputs: List[torch.Tensor]) -> torch.Tensor:
+    assert len(spec.input_specs) == len(inputs)
+    for (ispec, tensor) in zip(spec.input_specs, inputs):
+        ispec.shape == tensor.size()
+    # TODO: fill in
+    return torch.tensor(0.)
+
 def einsum_test():
     print("einsum_test() start")
 
@@ -299,6 +307,9 @@ def einsum_test():
     assert ES({},[EIS((),[],[])],EOS((),[])) == einsum_spec("->", [()], ())
     assert ES({},[EIS((),[],[])],EOS((),[])) == einsum_spec("...->...", [()], ())
     asserts(lambda: einsum_spec("->->", [()], ()))
+
+    t_0 = torch.tensor(0.)
+    assert torch.equal(t_0, einsum_execute(ES({},[EIS((),[],[])],EOS((),[])),[t_0]))
 
     print("einsum_test() end")
 
