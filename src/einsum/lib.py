@@ -1,45 +1,62 @@
 from dataclasses import dataclass
-from typing import List, Tuple, Dict
+from typing import List, Tuple, Dict, Optional
+
+Shape = Tuple[int,...]
+Idxs = List[int]
+IdxsMap = Dict[int,int]
 
 @dataclass
 class EinsumOutputSpec:
 
     # tuple of magnitudes (non-negative integers)
-    shape: Tuple[int,...]
+    shape: Shape
 
-    # indices is a list of integers in the output with [0,52) referring to
+    # idxs is a list of integers in the output with [0,52) referring to
     # regular indices (representing upper and lower case letters) and
     # consecutive negative indices representing ellipsis
-    indices: List[int]
+    idxs: Idxs
 
 @dataclass
 class EinsumInputSpec:
 
     # tuple of magnitudes
-    shape: Tuple[int,...]
+    shape: Shape
 
-    # leading_indices is a list of integers in [0,52), namely all indices at the
+    # leading_idxs is a list of integers in [0,52), namely all indices at the
     # beginning of the input up to the ellipsis, if any, otherwise to the end of
     # the input
-    leading_indices: List[int]
+    leading_idxs: Idxs
 
-    # trailing_indices is a list of integers in [0,52) in the input after any
+    # trailing_idxs is a list of integers in [0,52) in the input after any
     # ellipsis
-    trailing_indices: List[int]
+    trailing_idxs: Idxs
 
-    def ellipsis_shape(self):
-        begin = len(self.leading_indices)
-        end = len(self.shape) - len(self.trailing_indices)
+    def ellipsis_shape(self) -> Shape:
+        begin = len(self.leading_idxs)
+        end = len(self.shape) - len(self.trailing_idxs)
         return self.shape[begin:end]
 
-def einsum_indices(formula):
-    return [ einsum_index(letter) for letter in formula ]
+@dataclass
+class EinsumSpec:
+
+    # idxs_map maps indices to magnitudes, where an index
+    #   is an integer with [0,52) ranging over upper and lower case letters
+    #   (e.g. A and Z are 0 and 25, a and z are 26 and 51) and with
+    #   negative integers ranging over the indices of the ellipsis, if any
+    #   (-1 is the last index of the ellipsis, -2 is the second last, etc)
+    idxs_map: IdxsMap
+
+    # input_specs is a non-empty list of instances of EinsumInputSpec
+    input_specs: List[EinsumInputSpec]
+
+    # output_spec is an instance of EinsumOutputSpec
+    output_spec: EinsumOutputSpec
 
 EINSUM_LETTERS_UPPER = 26 # oounts upper case letters A-Z
 EINSUM_LETTERS_LOWER = 26 # counts lower case letters a-z
 EINSUM_LETTERS = EINSUM_LETTERS_UPPER + EINSUM_LETTERS_LOWER
 
-def einsum_index(letter):
+def einsum_index(letter: str) -> int:
     if "A" <= letter and letter <= "Z":
         x = ord(letter) - ord("A")
         assert 0 <= x < EINSUM_LETTERS_UPPER
@@ -50,27 +67,32 @@ def einsum_index(letter):
         return EINSUM_LETTERS_UPPER + x
     assert False, f"index '{letter}' ({ord(letter)}) is not a letter"
 
-def einsum_letter(index):
-    assert 0 <= index < EINSUM_LETTERS
-    if index < EINSUM_LETTERS_UPPER:
-        return chr(ord("A") + index)
+def einsum_letter(idx: int) -> str:
+    assert 0 <= idx < EINSUM_LETTERS
+    if idx < EINSUM_LETTERS_UPPER:
+        return chr(ord("A") + idx)
     else:
-        return chr(ord("a") + index - EINSUM_LETTERS_UPPER)
+        return chr(ord("a") + idx - EINSUM_LETTERS_UPPER)
 
-def einsum_infer_output_formula(indices_dict, input_specs):
+def einsum_idxs(formula: str) -> Idxs:
+    return [ einsum_index(letter) for letter in formula ]
+
+def einsum_infer_output_formula( \
+        idxs_map: IdxsMap, \
+        input_specs: List[EinsumInputSpec]) -> str:
     # count occurrences of letter indices in inputs
-    indices_count = [0] * EINSUM_LETTERS
+    idxs_count = [0] * EINSUM_LETTERS
     for spec in input_specs:
-        for indices in (spec.leading_indices, spec.trailing_indices):
-            for index in indices:
-                indices_count[index] += 1
+        for idxs in (spec.leading_idxs, spec.trailing_idxs):
+            for idx in idxs:
+                idxs_count[idx] += 1
     formula = "..."
-    for index in indices_dict:
-        if indices_count[index] == 1:
-            formula += einsum_letter(index)
+    for idx in idxs_map:
+        if idxs_count[idx] == 1:
+            formula += einsum_letter(idx)
     return formula
 
-def einsum_find_duplicate(letters):
+def einsum_find_duplicate(letters: str) -> Optional[str]:
     if len(letters) > 1:
         s = sorted(letters)
         for x in range(len(s) - 1):
@@ -78,13 +100,17 @@ def einsum_find_duplicate(letters):
                 return s[x]
     return None
 
-def einsum_ellipsis_indices(indices_dict):
-    return sorted([ index for index in indices_dict if index < 0 ])
+def einsum_ellipsis_idxs(idxs_map: IdxsMap) -> Idxs:
+    return sorted([ idx for idx in idxs_map if idx < 0 ])
 
-def einsum_output_spec(indices_dict, input_specs, formula, shape):
+def einsum_output_spec( \
+        idxs_map: IdxsMap, \
+        input_specs: List[EinsumInputSpec], \
+        formula: Optional[str], \
+        shape: Shape) -> EinsumOutputSpec:
     lst = None
-    if formula == None:
-        formula = einsum_infer_output_formula(indices_dict, input_specs)
+    if formula is None:
+        formula = einsum_infer_output_formula(idxs_map, input_specs)
         assert formula.startswith("...")
         trailing = formula[len("..."):]
         assert trailing.count(".") == trailing.count(" ") == 0
@@ -93,24 +119,24 @@ def einsum_output_spec(indices_dict, input_specs, formula, shape):
         lst = [ s.replace(" ", "") for s in formula.split("...") ]
         assert 1 <= len(lst) <= 2, f"multiple ellipses in '{formula}'"
         duplicate = einsum_find_duplicate("".join(lst))
-        assert duplicate == None, f"duplicate index {duplicate} in '{formula}'"
+        assert duplicate is None, f"duplicate index {duplicate} in '{formula}'"
 
-    indices = [ einsum_index(letter) for letter in lst[0] ]
+    idxs = [ einsum_index(letter) for letter in lst[0] ]
     if len(lst) == 2:
-        indices += einsum_ellipsis_indices(indices_dict)
-        indices += [ einsum_index(letter) for letter in lst[1] ]
-    assert [] == [ index for index in indices if index not in indices_dict ]
+        idxs += einsum_ellipsis_idxs(idxs_map)
+        idxs += [ einsum_index(letter) for letter in lst[1] ]
+    assert [] == [ idx for idx in idxs if idx not in idxs_map ]
 
-    # validate indices match shape
-    assert len(indices) == len(shape)
-    for x in range(len(indices)):
-        index = indices[x]
-        n = indices_dict[index]
+    # validate idxs match shape
+    assert len(idxs) == len(shape)
+    for x in range(len(idxs)):
+        idx = idxs[x]
+        n = idxs_map[idx]
         assert n == shape[x]
 
-    return EinsumOutputSpec(shape, indices)
+    return EinsumOutputSpec(shape, idxs)
 
-def einsum_input_spec(formula, shape):
+def einsum_input_spec(formula: str, shape: Shape) -> EinsumInputSpec:
     lst = [ s.replace(" ", "") for s in formula.split("...") ]
     if len(lst) == 1:
         assert len(lst[0]) == len(shape), \
@@ -120,71 +146,53 @@ def einsum_input_spec(formula, shape):
         assert len(lst) == 2, f"multiple ellipses in '{formula}'"
         assert len(lst[0]) + len(lst[1]) <= len(shape), \
             f"# indices in '{formula}' > length of shape {list(shape)}"
-    leading_indices = einsum_indices(lst[0])
-    trailing_indices = einsum_indices(lst[1])
-    return EinsumInputSpec(shape, leading_indices, trailing_indices)
+    leading_idxs = einsum_idxs(lst[0])
+    trailing_idxs = einsum_idxs(lst[1])
+    return EinsumInputSpec(shape, leading_idxs, trailing_idxs)
 
-def einsum_extend_indices_dict(indices_dict, index, n):
-    old = indices_dict.get(index)
+def einsum_extend_idxs_map(idxs_map: IdxsMap, idx: int, n: int) -> IdxsMap:
+    old = idxs_map.get(idx)
     if old == None or old == 1:
-        indices_dict[index] = n
+        idxs_map[idx] = n
     else:
-        assert n == 1 or n == old, \
-            f"cannot unify magnitudes {old}, {n}"
-    return indices_dict
+        assert n == 1 or n == old, f"cannot unify magnitudes {old}, {n}"
+    return idxs_map
 
-def einsum_indices_dict(input_specs):
-    indices_dict = {}
+def einsum_idxs_map(input_specs: List[EinsumInputSpec]) -> IdxsMap:
+    idxs_map: IdxsMap = {}
 
     for spec in input_specs:
         # process leading indices
-        leading = spec.leading_indices
+        leading = spec.leading_idxs
         for x in range(len(leading)):
-            index = leading[x]
+            idx = leading[x]
             n = spec.shape[x]
-            einsum_extend_indices_dict(indices_dict, index, n)
+            einsum_extend_idxs_map(idxs_map, idx, n)
         # process trailing indices
-        trailing = spec.trailing_indices
+        trailing = spec.trailing_idxs
         offset = len(spec.shape) - len(trailing)
         for x in range(len(trailing)):
-            index = trailing[x]
+            idx = trailing[x]
             n = spec.shape[offset + x]
-            einsum_extend_indices_dict(indices_dict, index, n)
+            einsum_extend_idxs_map(idxs_map, idx, n)
         # process ellipsis
         eshape = spec.ellipsis_shape()
         for x in range(len(eshape)):
-            index = -1 - x
-            einsum_extend_indices_dict(indices_dict, index, eshape[index])
+            idx = -1 - x
+            einsum_extend_idxs_map(idxs_map, idx, eshape[idx])
 
-    return indices_dict
+    return idxs_map
 
-def einsum_spec(equation, input_shapes, output_shape):
+def einsum_spec(equation: str, input_shapes: List[Shape], output_shape: Shape) -> EinsumSpec:
     io = equation.split("->")
     assert 1 <= len(io) <= 2, f"multiple arrows in '{equation}'"
     output_formula = io[1] if len(io) == 2 else None
     input_formulas = io[0].split(",")
     assert len(input_formulas) == len(input_shapes), "# equation inputs != # input shapes"
     input_specs = [ einsum_input_spec(*p) for p in zip(input_formulas, input_shapes) ]
-    indices_dict = einsum_indices_dict(input_specs)
-    output_spec = einsum_output_spec(indices_dict, input_specs, output_formula, output_shape)
-    return EinsumSpec(indices_dict, input_specs, output_spec)
-
-@dataclass
-class EinsumSpec:
-
-    # indices_dict maps indices to magnitudes, where an index
-    #   is an integer with [0,52) ranging over upper and lower case letters
-    #   (e.g. A and Z are 0 and 25, a and z are 26 and 51) and with
-    #   negative integers ranging over the indices of the ellipsis, if any
-    #   (-1 is the last index of the ellipsis, -2 is the second last, etc)
-    indices_dict: Dict[int,int]
-    
-    # input_specs is a non-empty list of instances of EinsumInputSpec
-    input_specs: List[int]
-
-    # output_spec is an instance of EinsumOutputSpec
-    output_spec: EinsumOutputSpec
-
+    idxs_map = einsum_idxs_map(input_specs)
+    output_spec = einsum_output_spec(idxs_map, input_specs, output_formula, output_shape)
+    return EinsumSpec(idxs_map, input_specs, output_spec)
 
 def einsum_test():
     print("einsum_test() start")
@@ -206,27 +214,27 @@ def einsum_test():
     assert 1 == einsum_index("B")
     asserts(lambda: einsum_index("-"))
 
-    assert [0,26,51] == einsum_indices("Aaz")
-    assert [] == einsum_indices("")
+    assert [0,26,51] == einsum_idxs("Aaz")
+    assert [] == einsum_idxs("")
 
     assert None == einsum_find_duplicate("")
     assert None == einsum_find_duplicate("Unique")
     assert "U" == einsum_find_duplicate("UNIQUE")
     assert "x" == einsum_find_duplicate("xx")
 
-    assert [] == einsum_ellipsis_indices({})
-    assert [] == einsum_ellipsis_indices({34:2, 35:3})
-    assert [-2, -1] == einsum_ellipsis_indices({34:2, -1:4, -2:5})
+    assert [] == einsum_ellipsis_idxs({})
+    assert [] == einsum_ellipsis_idxs({34:2, 35:3})
+    assert [-2, -1] == einsum_ellipsis_idxs({34:2, -1:4, -2:5})
 
-    assert {34:0} == einsum_extend_indices_dict({}, 34, 0)
-    assert {34:1} == einsum_extend_indices_dict({}, 34, 1)
-    assert {34:2} == einsum_extend_indices_dict({}, 34, 2)
-    assert {34:1} == einsum_extend_indices_dict({34:1}, 34, 1)
-    assert {34:2} == einsum_extend_indices_dict({34:1}, 34, 2)
-    assert {34:2} == einsum_extend_indices_dict({34:2}, 34, 1)
-    assert {34:2} == einsum_extend_indices_dict({34:2}, 34, 2)
-    assert {34:2, 35:3} == einsum_extend_indices_dict({34:2}, 35, 3)
-    asserts(lambda: einsum_extend_indices_dict({34:2}, 34, 0))
+    assert {34:0} == einsum_extend_idxs_map({}, 34, 0)
+    assert {34:1} == einsum_extend_idxs_map({}, 34, 1)
+    assert {34:2} == einsum_extend_idxs_map({}, 34, 2)
+    assert {34:1} == einsum_extend_idxs_map({34:1}, 34, 1)
+    assert {34:2} == einsum_extend_idxs_map({34:1}, 34, 2)
+    assert {34:2} == einsum_extend_idxs_map({34:2}, 34, 1)
+    assert {34:2} == einsum_extend_idxs_map({34:2}, 34, 2)
+    assert {34:2, 35:3} == einsum_extend_idxs_map({34:2}, 35, 3)
+    asserts(lambda: einsum_extend_idxs_map({34:2}, 34, 0))
 
     assert EIS((),[],[]) == einsum_input_spec("", ())
     assert EIS((),[],[]) == einsum_input_spec(" ", ())
@@ -256,12 +264,12 @@ def einsum_test():
     e_315 = einsum_input_spec("...",(3,1,5))
     e_ = einsum_input_spec("...",())
     e_2 = einsum_input_spec("...",(2,))
-    assert {} == einsum_indices_dict([])
-    assert {8:2} == einsum_indices_dict([eI1,eI2])
-    assert {8:2} == einsum_indices_dict([eI1,eI2,eI2])
-    asserts(lambda: einsum_indices_dict([eI2,eI3]))
-    assert {-3:3,-2:4,-1:5,8:2,9:6} == einsum_indices_dict([eI_245,e_J456,e_315,e_])
-    asserts(lambda: einsum_indices_dict([e_315,e_2]))
+    assert {} == einsum_idxs_map([])
+    assert {8:2} == einsum_idxs_map([eI1,eI2])
+    assert {8:2} == einsum_idxs_map([eI1,eI2,eI2])
+    asserts(lambda: einsum_idxs_map([eI2,eI3]))
+    assert {-3:3,-2:4,-1:5,8:2,9:6} == einsum_idxs_map([eI_245,e_J456,e_315,e_])
+    asserts(lambda: einsum_idxs_map([e_315,e_2]))
 
     assert "..." == einsum_infer_output_formula({}, [])
     assert "...I" == einsum_infer_output_formula({8:2}, [EIS((2,),[8],[])])
