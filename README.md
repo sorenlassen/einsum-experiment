@@ -13,3 +13,9 @@ For now, a self test runs if lib.py is run as the main module:
 ```bash
 python3 src/einsum/lib.py
 ```
+
+Type check with mypy:
+```bash
+python3 -m pip install mypy
+python3 -m mypy src/einsum/lib.py
+```
