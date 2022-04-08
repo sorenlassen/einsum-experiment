@@ -199,6 +199,11 @@ def einsum_execute(spec: EinsumSpec, tensors: List[torch.Tensor]) -> torch.Tenso
     assert len(spec.inputs) == len(tensors)
     for (input_, tensor) in zip(spec.inputs, tensors):
         input_.shape == tensor.size()
+
+    # result is all zeros (or empty) if any input or output dimension is zero
+    if list(spec.idxs_map.values()).count(0) > 0:
+        return torch.tensor(0.).broadcast_to(spec.output.shape)
+
     # TODO: fill in
     return torch.tensor(0.)
 
@@ -309,7 +314,10 @@ def einsum_test():
     asserts(lambda: einsum_spec("->->", [()], ()))
 
     t_0 = torch.tensor(0.)
+    t0_0 = torch.empty(0)
     assert torch.equal(t_0, einsum_execute(ES({},[EIS((),[],[])],EOS((),[])),[t_0]))
+    assert torch.equal(t_0, einsum_execute(ES({8:0},[EIS((0,),[8],[])],EOS((),[])),[t0_0]))
+    assert torch.equal(t0_0, einsum_execute(ES({8:0},[EIS((),[],[])],EOS((0),[8])),[t_0]))
 
     print("einsum_test() end")
 
