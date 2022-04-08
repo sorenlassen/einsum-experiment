@@ -47,11 +47,11 @@ class EinsumSpec:
     #   (-1 is the last index of the ellipsis, -2 is the second last, etc)
     idxs_map: IdxsMap
 
-    # input_specs is a non-empty list of instances of EinsumInputSpec
-    input_specs: List[EinsumInputSpec]
+    # inputs is a non-empty list of instances of EinsumInputSpec
+    inputs: List[EinsumInputSpec]
 
-    # output_spec is an instance of EinsumOutputSpec
-    output_spec: EinsumOutputSpec
+    # output is an instance of EinsumOutputSpec
+    output: EinsumOutputSpec
 
 EINSUM_LETTERS_UPPER = 26 # oounts upper case letters A-Z
 EINSUM_LETTERS_LOWER = 26 # counts lower case letters a-z
@@ -80,10 +80,10 @@ def einsum_idxs(formula: str) -> Idxs:
 
 def einsum_infer_output_formula( \
         idxs_map: IdxsMap, \
-        input_specs: List[EinsumInputSpec]) -> str:
+        inputs: List[EinsumInputSpec]) -> str:
     # count occurrences of letter indices in inputs
     idxs_count = [0] * EINSUM_LETTERS
-    for spec in input_specs:
+    for spec in inputs:
         for idxs in (spec.leading_idxs, spec.trailing_idxs):
             for idx in idxs:
                 idxs_count[idx] += 1
@@ -104,14 +104,14 @@ def einsum_find_duplicate(letters: str) -> Optional[str]:
 def einsum_ellipsis_idxs(idxs_map: IdxsMap) -> Idxs:
     return sorted([ idx for idx in idxs_map if idx < 0 ])
 
-def einsum_output_spec( \
+def einsum_output( \
         idxs_map: IdxsMap, \
-        input_specs: List[EinsumInputSpec], \
+        inputs: List[EinsumInputSpec], \
         formula: Optional[str], \
         shape: Shape) -> EinsumOutputSpec:
     lst = None
     if formula is None:
-        formula = einsum_infer_output_formula(idxs_map, input_specs)
+        formula = einsum_infer_output_formula(idxs_map, inputs)
         assert formula.startswith("...")
         trailing = formula[len("..."):]
         assert trailing.count(".") == trailing.count(" ") == 0
@@ -137,7 +137,7 @@ def einsum_output_spec( \
 
     return EinsumOutputSpec(shape, idxs)
 
-def einsum_input_spec(formula: str, shape: Shape) -> EinsumInputSpec:
+def einsum_input(formula: str, shape: Shape) -> EinsumInputSpec:
     lst = [ s.replace(" ", "") for s in formula.split("...") ]
     if len(lst) == 1:
         assert len(lst[0]) == len(shape), \
@@ -159,10 +159,10 @@ def einsum_extend_idxs_map(idxs_map: IdxsMap, idx: int, n: int) -> IdxsMap:
         assert n == 1 or n == old, f"cannot unify magnitudes {old}, {n}"
     return idxs_map
 
-def einsum_idxs_map(input_specs: List[EinsumInputSpec]) -> IdxsMap:
+def einsum_idxs_map(inputs: List[EinsumInputSpec]) -> IdxsMap:
     idxs_map: IdxsMap = {}
 
-    for spec in input_specs:
+    for spec in inputs:
         # process leading indices
         leading = spec.leading_idxs
         for x in range(len(leading)):
@@ -190,15 +190,15 @@ def einsum_spec(equation: str, input_shapes: List[Shape], output_shape: Shape) -
     output_formula = io[1] if len(io) == 2 else None
     input_formulas = io[0].split(",")
     assert len(input_formulas) == len(input_shapes), "# equation inputs != # input shapes"
-    input_specs = [ einsum_input_spec(*p) for p in zip(input_formulas, input_shapes) ]
-    idxs_map = einsum_idxs_map(input_specs)
-    output_spec = einsum_output_spec(idxs_map, input_specs, output_formula, output_shape)
-    return EinsumSpec(idxs_map, input_specs, output_spec)
+    inputs = [ einsum_input(*p) for p in zip(input_formulas, input_shapes) ]
+    idxs_map = einsum_idxs_map(inputs)
+    output = einsum_output(idxs_map, inputs, output_formula, output_shape)
+    return EinsumSpec(idxs_map, inputs, output)
 
-def einsum_execute(spec: EinsumSpec, inputs: List[torch.Tensor]) -> torch.Tensor:
-    assert len(spec.input_specs) == len(inputs)
-    for (ispec, tensor) in zip(spec.input_specs, inputs):
-        ispec.shape == tensor.size()
+def einsum_execute(spec: EinsumSpec, tensors: List[torch.Tensor]) -> torch.Tensor:
+    assert len(spec.inputs) == len(tensors)
+    for (input_, tensor) in zip(spec.inputs, tensors):
+        input_.shape == tensor.size()
     # TODO: fill in
     return torch.tensor(0.)
 
@@ -244,34 +244,34 @@ def einsum_test():
     assert {34:2, 35:3} == einsum_extend_idxs_map({34:2}, 35, 3)
     asserts(lambda: einsum_extend_idxs_map({34:2}, 34, 0))
 
-    assert EIS((),[],[]) == einsum_input_spec("", ())
-    assert EIS((),[],[]) == einsum_input_spec(" ", ())
-    asserts(lambda: einsum_input_spec("", (2,)))
-    asserts(lambda: einsum_input_spec("i", ()))
-    assert EIS((),[],[]) == einsum_input_spec("...", ())
-    assert EIS((),[],[]) == einsum_input_spec(" ... ", ())
-    asserts(lambda: einsum_input_spec(". ..", ()))
-    asserts(lambda: einsum_input_spec("..", ()))
-    assert EIS((2,),[],[]) == einsum_input_spec("...", (2,))
-    assert EIS((2,),[34],[]) == einsum_input_spec("i", (2,))
-    assert EIS((2,),[34],[]) == einsum_input_spec(" i ", (2,))
-    assert EIS((2,),[34],[]) == einsum_input_spec("i...", (2,))
-    assert EIS((2,),[34],[]) == einsum_input_spec("i ...", (2,))
-    assert EIS((2,),[],[34]) == einsum_input_spec("...i", (2,))
-    assert EIS((2,3),[34,35],[]) == einsum_input_spec("ij", (2,3))
-    assert EIS((2,3),[34,35],[]) == einsum_input_spec("i j", (2,3))
-    assert EIS((2,3,4),[34],[35,36]) == einsum_input_spec("i...jk", (2,3,4))
-    assert EIS((2,3,4),[34],[8])== einsum_input_spec("i...I", (2,3,4))
-    assert EIS((2,3,4),[34],[]) == einsum_input_spec("i...", (2,3,4))
+    assert EIS((),[],[]) == einsum_input("", ())
+    assert EIS((),[],[]) == einsum_input(" ", ())
+    asserts(lambda: einsum_input("", (2,)))
+    asserts(lambda: einsum_input("i", ()))
+    assert EIS((),[],[]) == einsum_input("...", ())
+    assert EIS((),[],[]) == einsum_input(" ... ", ())
+    asserts(lambda: einsum_input(". ..", ()))
+    asserts(lambda: einsum_input("..", ()))
+    assert EIS((2,),[],[]) == einsum_input("...", (2,))
+    assert EIS((2,),[34],[]) == einsum_input("i", (2,))
+    assert EIS((2,),[34],[]) == einsum_input(" i ", (2,))
+    assert EIS((2,),[34],[]) == einsum_input("i...", (2,))
+    assert EIS((2,),[34],[]) == einsum_input("i ...", (2,))
+    assert EIS((2,),[],[34]) == einsum_input("...i", (2,))
+    assert EIS((2,3),[34,35],[]) == einsum_input("ij", (2,3))
+    assert EIS((2,3),[34,35],[]) == einsum_input("i j", (2,3))
+    assert EIS((2,3,4),[34],[35,36]) == einsum_input("i...jk", (2,3,4))
+    assert EIS((2,3,4),[34],[8])== einsum_input("i...I", (2,3,4))
+    assert EIS((2,3,4),[34],[]) == einsum_input("i...", (2,3,4))
 
-    eI1 = einsum_input_spec("I",(1,))
-    eI2 = einsum_input_spec("I",(2,))
-    eI3 = einsum_input_spec("I",(3,))
-    eI_245 = einsum_input_spec("I...",(2,4,5))
-    e_J456 = einsum_input_spec("...J",(4,5,6))
-    e_315 = einsum_input_spec("...",(3,1,5))
-    e_ = einsum_input_spec("...",())
-    e_2 = einsum_input_spec("...",(2,))
+    eI1 = einsum_input("I",(1,))
+    eI2 = einsum_input("I",(2,))
+    eI3 = einsum_input("I",(3,))
+    eI_245 = einsum_input("I...",(2,4,5))
+    e_J456 = einsum_input("...J",(4,5,6))
+    e_315 = einsum_input("...",(3,1,5))
+    e_ = einsum_input("...",())
+    e_2 = einsum_input("...",(2,))
     assert {} == einsum_idxs_map([])
     assert {8:2} == einsum_idxs_map([eI1,eI2])
     assert {8:2} == einsum_idxs_map([eI1,eI2,eI2])
@@ -285,23 +285,23 @@ def einsum_test():
     assert "..." == einsum_infer_output_formula({8:2}, [EIS((2,2),[8,8],[])])
     assert "..." == einsum_infer_output_formula({8:2}, [EIS((2,),[8],[]), EIS((2,),[8],[])])
 
-    assert EOS((),[]) == einsum_output_spec({}, [], "", ())
-    assert EOS((),[]) == einsum_output_spec({}, [], " ", ())
-    assert EOS((),[]) == einsum_output_spec({}, [], "...", ())
-    asserts(lambda: einsum_output_spec({}, [], ". ..", ()))
-    asserts(lambda: einsum_output_spec({}, [], "..", ()))
-    asserts(lambda: einsum_output_spec({}, [], "......", ()))
-    assert EOS((),[]) == einsum_output_spec({8:2}, [EIS((2,),[8],[])], "", ())
-    assert EOS((2,),[8]) == einsum_output_spec({8:2}, [EIS((2,),[8],[])], "I", (2,))
-    assert EOS((2,),[8]) == einsum_output_spec({8:2}, [EIS((2,),[8],[])], None, (2,))
+    assert EOS((),[]) == einsum_output({}, [], "", ())
+    assert EOS((),[]) == einsum_output({}, [], " ", ())
+    assert EOS((),[]) == einsum_output({}, [], "...", ())
+    asserts(lambda: einsum_output({}, [], ". ..", ()))
+    asserts(lambda: einsum_output({}, [], "..", ()))
+    asserts(lambda: einsum_output({}, [], "......", ()))
+    assert EOS((),[]) == einsum_output({8:2}, [EIS((2,),[8],[])], "", ())
+    assert EOS((2,),[8]) == einsum_output({8:2}, [EIS((2,),[8],[])], "I", (2,))
+    assert EOS((2,),[8]) == einsum_output({8:2}, [EIS((2,),[8],[])], None, (2,))
     assert EOS((2,4),[8,10]) == \
-        einsum_output_spec( \
+        einsum_output( \
             {8:2,9:3,10:4}, [EIS((2,3),[8,9],[]), EIS((3,4),[9,10],[])], None, (2,4))
     assert EOS((2,4),[8,10]) == \
-        einsum_output_spec( \
+        einsum_output( \
             {8:2,9:3,10:4}, [EIS((2,3),[8,9],[]), EIS((3,4),[9,10],[])], "IK", (2,4))
-    asserts(lambda: einsum_output_spec({}, [], "......", ()))
-    asserts(lambda: einsum_output_spec({8:2}, [EIS((2,),[8],[])], "II", (2,2)))
+    asserts(lambda: einsum_output({}, [], "......", ()))
+    asserts(lambda: einsum_output({8:2}, [EIS((2,),[8],[])], "II", (2,2)))
 
     assert ES({},[EIS((),[],[])],EOS((),[])) == einsum_spec("", [()], ())
     assert ES({},[EIS((),[],[])],EOS((),[])) == einsum_spec("->", [()], ())
