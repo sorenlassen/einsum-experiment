@@ -1,10 +1,18 @@
 from dataclasses import dataclass
-from typing import List, Tuple, Dict, Optional
-import torch
+from typing import List, Tuple, Dict, Optional, Callable
+import math
+import numpy as np
 
 Shape = Tuple[int,...]
 Idxs = List[int]
 IdxsMap = Dict[int,int]
+Tensor = np.ndarray
+
+def einsum_tensor(x) -> Tensor:
+    return np.array(x)
+
+def einsum_empty_tensor(shape: Shape) -> Tensor:
+    return np.broadcast_to(0., shape)
 
 @dataclass
 class EinsumOutputSpec:
@@ -195,17 +203,61 @@ def einsum_spec(equation: str, input_shapes: List[Shape], output_shape: Shape) -
     output = einsum_output(idxs_map, inputs, output_formula, output_shape)
     return EinsumSpec(idxs_map, inputs, output)
 
-def einsum_execute(spec: EinsumSpec, tensors: List[torch.Tensor]) -> torch.Tensor:
+def einsum_input_idxs(input_spec: EinsumInputSpec):
+    count = len(input_spec.leading_idxs) + len(input_spec.trailing_idxs)
+    assert count <= len(input_spec.shape)
+    ellipsis = list(range(count - len(input_spec.shape), 0))
+    idxs = input_spec.leading_idxs + ellipsis + input_spec.trailing_idxs
+    assert len(idxs) == len(input_spec.shape)
+    return idxs
+
+
+def einsum_execute(spec: EinsumSpec, tensors: List[Tensor]) -> Tensor:
     assert len(spec.inputs) == len(tensors)
-    for (input_, tensor) in zip(spec.inputs, tensors):
-        input_.shape == tensor.size()
+    for input_spec, tensor in zip(spec.inputs, tensors):
+        assert input_spec.shape == tensor.shape
 
-    # result is all zeros (or empty) if any input or output dimension is zero
-    if list(spec.idxs_map.values()).count(0) > 0:
-        return torch.tensor(0.).broadcast_to(spec.output.shape)
+    in_idxs = list(map(einsum_input_idxs, spec.inputs))
+    out_idxs = spec.output.idxs
+    in_only_idxs = list(set(spec.idxs_map).difference(out_idxs))
+    def function(*opos) -> float:
+        assert len(opos) == len(out_idxs)
+        pos_map = dict(zip(out_idxs, opos))
 
-    # TODO: fill in
-    return torch.tensor(0.)
+        def recurse(remaining_idxs: Idxs) -> float:
+            if len(remaining_idxs) == 0:
+                prod = 1.
+                for idxs, tensor in zip(in_idxs, tensors):
+                    pos = [ pos_map[idx] for idx in idxs ]
+                    prod *= tensor.item(*pos)
+                return prod
+            else:
+                head = remaining_idxs[0]
+                tail = remaining_idxs[1:]
+                acc = 0.
+                for p in range(spec.idxs_map[head]):
+                    pos_map[head] = p
+                    acc += recurse(tail)
+                return acc
+
+        return recurse(in_only_idxs)
+
+    return einsum_make_tensor(function, spec.output.shape)
+
+
+def einsum_make_tensor(function: Callable[..., float], shape: Shape) -> Tensor:
+    if math.prod(shape) == 0:
+        return einsum_empty_tensor(shape)
+
+    def recurse(pos: List[int], shape: Shape):
+        if len(shape) == 0:
+            return function(*pos)
+        else:
+            remainder = shape[1:]
+            return [ recurse(pos + [i], remainder) for i in range(shape[0]) ]
+
+    return einsum_tensor(recurse([], shape))
+
 
 def einsum_test():
     print("einsum_test() start")
@@ -313,11 +365,15 @@ def einsum_test():
     assert ES({},[EIS((),[],[])],EOS((),[])) == einsum_spec("...->...", [()], ())
     asserts(lambda: einsum_spec("->->", [()], ()))
 
-    t_0 = torch.tensor(0.)
-    t0_0 = torch.empty(0)
-    assert torch.equal(t_0, einsum_execute(ES({},[EIS((),[],[])],EOS((),[])),[t_0]))
-    assert torch.equal(t_0, einsum_execute(ES({8:0},[EIS((0,),[8],[])],EOS((),[])),[t0_0]))
-    assert torch.equal(t0_0, einsum_execute(ES({8:0},[EIS((),[],[])],EOS((0),[8])),[t_0]))
+    eqT = np.array_equal
+    t_0 = einsum_tensor(0.)
+    t0_0 = einsum_tensor([])
+    t1_0 = einsum_tensor([0.])
+    assert eqT(t_0, einsum_execute(ES({},[EIS((),[],[])],EOS((),[])),[t_0]))
+    assert eqT(t_0, einsum_execute(ES({8:0},[EIS((0,),[8],[])],EOS((),[])),[t0_0]))
+    assert eqT(t0_0, einsum_execute(ES({8:0},[EIS((),[],[])],EOS((0,),[8])),[t_0]))
+    assert eqT(t_0, einsum_execute(ES({8:1},[EIS((1,),[8],[])],EOS((),[])),[t1_0]))
+    assert eqT(t1_0, einsum_execute(ES({8:1},[EIS((1,),[8],[])],EOS((1,),[8])),[t1_0]))
 
     print("einsum_test() end")
 
