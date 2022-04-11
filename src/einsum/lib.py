@@ -255,6 +255,11 @@ def einsum_execute(spec: EinsumSpec, tensors: List[Tensor]) -> Tensor:
 
     return einsum_tensor_frompos(fn, spec.output.shape)
 
+def einsum(equation: str, tensors: List[Tensor]) -> Tensor:
+    ishapes = [ tensor.shape for tensor in tensors ]
+    spec = einsum_spec(equation, ishapes)
+    return einsum_execute(spec, tensors)
+
 
 def einsum_test():
     print("einsum_test() start")
@@ -371,6 +376,12 @@ def einsum_test():
     assert eqT(t0_0, einsum_execute(ES({8:0},[EIS((0,),[8],[])],EOS((0,),[8])),[t0_0]))
     assert eqT(t_0, einsum_execute(ES({8:1},[EIS((1,),[8],[])],EOS((),[])),[t1_0]))
     assert eqT(t1_0, einsum_execute(ES({8:1},[EIS((1,),[8],[])],EOS((1,),[8])),[t1_0]))
+
+    assert eqT(t_0, einsum("->",[t_0]))
+    assert eqT(t_0, einsum("I->",[t0_0]))
+    assert eqT(t0_0, einsum("I->I",[t0_0]))
+    assert eqT(t_0, einsum("I->",[t1_0]))
+    assert eqT(t1_0, einsum("I",[t1_0]))
 
     print("einsum_test() end")
 
