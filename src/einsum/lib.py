@@ -131,8 +131,8 @@ def einsum_ellipsis_idxs(idxs_map: IdxsMap) -> Idxs:
 def einsum_output( \
         idxs_map: IdxsMap, \
         ispecs: List[EinsumInputSpec], \
-        formula: Optional[str], \
-        shape: Shape) -> EinsumOutputSpec:
+        formula: Optional[str]) \
+        -> EinsumOutputSpec:
     lst = None
     if formula is None:
         formula = einsum_infer_output_formula(idxs_map, ispecs)
@@ -152,12 +152,7 @@ def einsum_output( \
         idxs += [ einsum_index(letter) for letter in lst[1] ]
     assert [] == [ idx for idx in idxs if idx not in idxs_map ]
 
-    # validate idxs match shape
-    assert len(idxs) == len(shape)
-    for x in range(len(idxs)):
-        idx = idxs[x]
-        n = idxs_map[idx]
-        assert n == shape[x]
+    shape = tuple( idxs_map[idx] for idx in idxs )
 
     return EinsumOutputSpec(shape, idxs)
 
@@ -208,7 +203,7 @@ def einsum_idxs_map(ispecs: List[EinsumInputSpec]) -> IdxsMap:
 
     return idxs_map
 
-def einsum_spec(equation: str, ishapes: List[Shape], oshape: Shape) -> EinsumSpec:
+def einsum_spec(equation: str, ishapes: List[Shape]) -> EinsumSpec:
     io = equation.split("->")
     assert 1 <= len(io) <= 2, f"multiple arrows in '{equation}'"
     oformula = io[1] if len(io) == 2 else None
@@ -216,7 +211,7 @@ def einsum_spec(equation: str, ishapes: List[Shape], oshape: Shape) -> EinsumSpe
     assert len(iformulas) == len(ishapes), "# equation inputs != # input shapes"
     ispecs = [ einsum_input(*p) for p in zip(iformulas, ishapes) ]
     idxs_map = einsum_idxs_map(ispecs)
-    ospec = einsum_output(idxs_map, ispecs, oformula, oshape)
+    ospec = einsum_output(idxs_map, ispecs, oformula)
     return EinsumSpec(idxs_map, ispecs, ospec)
 
 def einsum_input_idxs(input_spec: EinsumInputSpec):
@@ -344,28 +339,28 @@ def einsum_test():
     assert "..." == einsum_infer_output_formula({8:2}, [EIS((2,2),[8,8],[])])
     assert "..." == einsum_infer_output_formula({8:2}, [EIS((2,),[8],[]), EIS((2,),[8],[])])
 
-    assert EOS((),[]) == einsum_output({}, [], "", ())
-    assert EOS((),[]) == einsum_output({}, [], " ", ())
-    assert EOS((),[]) == einsum_output({}, [], "...", ())
-    asserts(lambda: einsum_output({}, [], ". ..", ()))
-    asserts(lambda: einsum_output({}, [], "..", ()))
-    asserts(lambda: einsum_output({}, [], "......", ()))
-    assert EOS((),[]) == einsum_output({8:2}, [EIS((2,),[8],[])], "", ())
-    assert EOS((2,),[8]) == einsum_output({8:2}, [EIS((2,),[8],[])], "I", (2,))
-    assert EOS((2,),[8]) == einsum_output({8:2}, [EIS((2,),[8],[])], None, (2,))
+    assert EOS((),[]) == einsum_output({}, [], "")
+    assert EOS((),[]) == einsum_output({}, [], " ")
+    assert EOS((),[]) == einsum_output({}, [], "...")
+    asserts(lambda: einsum_output({}, [], ". .."))
+    asserts(lambda: einsum_output({}, [], ".."))
+    asserts(lambda: einsum_output({}, [], "......"))
+    assert EOS((),[]) == einsum_output({8:2}, [EIS((2,),[8],[])], "")
+    assert EOS((2,),[8]) == einsum_output({8:2}, [EIS((2,),[8],[])], "I")
+    assert EOS((2,),[8]) == einsum_output({8:2}, [EIS((2,),[8],[])], None)
     assert EOS((2,4),[8,10]) == \
         einsum_output( \
-            {8:2,9:3,10:4}, [EIS((2,3),[8,9],[]), EIS((3,4),[9,10],[])], None, (2,4))
+            {8:2,9:3,10:4}, [EIS((2,3),[8,9],[]), EIS((3,4),[9,10],[])], None)
     assert EOS((2,4),[8,10]) == \
         einsum_output( \
-            {8:2,9:3,10:4}, [EIS((2,3),[8,9],[]), EIS((3,4),[9,10],[])], "IK", (2,4))
-    asserts(lambda: einsum_output({}, [], "......", ()))
-    asserts(lambda: einsum_output({8:2}, [EIS((2,),[8],[])], "II", (2,2)))
+            {8:2,9:3,10:4}, [EIS((2,3),[8,9],[]), EIS((3,4),[9,10],[])], "IK")
+    asserts(lambda: einsum_output({}, [], "......"))
+    asserts(lambda: einsum_output({8:2}, [EIS((2,),[8],[])], "II"))
 
-    assert ES({},[EIS((),[],[])],EOS((),[])) == einsum_spec("", [()], ())
-    assert ES({},[EIS((),[],[])],EOS((),[])) == einsum_spec("->", [()], ())
-    assert ES({},[EIS((),[],[])],EOS((),[])) == einsum_spec("...->...", [()], ())
-    asserts(lambda: einsum_spec("->->", [()], ()))
+    assert ES({},[EIS((),[],[])],EOS((),[])) == einsum_spec("", [()])
+    assert ES({},[EIS((),[],[])],EOS((),[])) == einsum_spec("->", [()])
+    assert ES({},[EIS((),[],[])],EOS((),[])) == einsum_spec("...->...", [()])
+    asserts(lambda: einsum_spec("->->", [()]))
 
     eqT = np.array_equal
     t_0 = einsum_tensor(0.)
@@ -373,7 +368,7 @@ def einsum_test():
     t1_0 = einsum_tensor([0.])
     assert eqT(t_0, einsum_execute(ES({},[EIS((),[],[])],EOS((),[])),[t_0]))
     assert eqT(t_0, einsum_execute(ES({8:0},[EIS((0,),[8],[])],EOS((),[])),[t0_0]))
-    assert eqT(t0_0, einsum_execute(ES({8:0},[EIS((),[],[])],EOS((0,),[8])),[t_0]))
+    assert eqT(t0_0, einsum_execute(ES({8:0},[EIS((0,),[8],[])],EOS((0,),[8])),[t0_0]))
     assert eqT(t_0, einsum_execute(ES({8:1},[EIS((1,),[8],[])],EOS((),[])),[t1_0]))
     assert eqT(t1_0, einsum_execute(ES({8:1},[EIS((1,),[8],[])],EOS((1,),[8])),[t1_0]))
 
