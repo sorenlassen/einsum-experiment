@@ -8,11 +8,27 @@ Idxs = List[int]
 IdxsMap = Dict[int,int]
 Tensor = np.ndarray
 
+
 def einsum_tensor(x) -> Tensor:
     return np.array(x)
 
 def einsum_empty_tensor(shape: Shape) -> Tensor:
     return np.broadcast_to(0., shape)
+
+# returns tensor of given shape with value fn(i1,...,iN) at pos (i1...iN)
+def einsum_tensor_frompos(fn: Callable[..., float], shape: Shape) -> Tensor:
+   if math.prod(shape) == 0:
+       return einsum_empty_tensor(shape)
+
+   def recurse(pos: List[int], shape: Shape):
+       if len(shape) == 0:
+           return fn(*pos)
+       else:
+           remainder = shape[1:]
+           return [ recurse(pos + [i], remainder) for i in range(shape[0]) ]
+
+   return einsum_tensor(recurse([], shape))
+
 
 @dataclass
 class EinsumOutputSpec:
@@ -220,7 +236,7 @@ def einsum_execute(spec: EinsumSpec, tensors: List[Tensor]) -> Tensor:
     in_idxs = list(map(einsum_input_idxs, spec.inputs))
     out_idxs = spec.output.idxs
     in_only_idxs = list(set(spec.idxs_map).difference(out_idxs))
-    def function(*opos) -> float:
+    def fn(*opos) -> float:
         assert len(opos) == len(out_idxs)
         pos_map = dict(zip(out_idxs, opos))
 
@@ -242,21 +258,8 @@ def einsum_execute(spec: EinsumSpec, tensors: List[Tensor]) -> Tensor:
 
         return recurse(in_only_idxs)
 
-    return einsum_make_tensor(function, spec.output.shape)
+    return einsum_tensor_frompos(fn, spec.output.shape)
 
-
-def einsum_make_tensor(function: Callable[..., float], shape: Shape) -> Tensor:
-    if math.prod(shape) == 0:
-        return einsum_empty_tensor(shape)
-
-    def recurse(pos: List[int], shape: Shape):
-        if len(shape) == 0:
-            return function(*pos)
-        else:
-            remainder = shape[1:]
-            return [ recurse(pos + [i], remainder) for i in range(shape[0]) ]
-
-    return einsum_tensor(recurse([], shape))
 
 
 def einsum_test():
