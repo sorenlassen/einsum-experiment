@@ -104,10 +104,10 @@ def einsum_idxs(formula: str) -> Idxs:
 
 def einsum_infer_output_formula( \
         idxs_map: IdxsMap, \
-        inputs: List[EinsumInputSpec]) -> str:
+        ispecs: List[EinsumInputSpec]) -> str:
     # count occurrences of letter indices in inputs
     idxs_count = [0] * EINSUM_LETTERS
-    for spec in inputs:
+    for spec in ispecs:
         for idxs in (spec.leading_idxs, spec.trailing_idxs):
             for idx in idxs:
                 idxs_count[idx] += 1
@@ -130,12 +130,12 @@ def einsum_ellipsis_idxs(idxs_map: IdxsMap) -> Idxs:
 
 def einsum_output( \
         idxs_map: IdxsMap, \
-        inputs: List[EinsumInputSpec], \
+        ispecs: List[EinsumInputSpec], \
         formula: Optional[str], \
         shape: Shape) -> EinsumOutputSpec:
     lst = None
     if formula is None:
-        formula = einsum_infer_output_formula(idxs_map, inputs)
+        formula = einsum_infer_output_formula(idxs_map, ispecs)
         assert formula.startswith("...")
         trailing = formula[len("..."):]
         assert trailing.count(".") == trailing.count(" ") == 0
@@ -183,10 +183,10 @@ def einsum_extend_idxs_map(idxs_map: IdxsMap, idx: int, n: int) -> IdxsMap:
         assert n == 1 or n == old, f"cannot unify magnitudes {old}, {n}"
     return idxs_map
 
-def einsum_idxs_map(inputs: List[EinsumInputSpec]) -> IdxsMap:
+def einsum_idxs_map(ispecs: List[EinsumInputSpec]) -> IdxsMap:
     idxs_map: IdxsMap = {}
 
-    for spec in inputs:
+    for spec in ispecs:
         # process leading indices
         leading = spec.leading_idxs
         for x in range(len(leading)):
@@ -208,16 +208,16 @@ def einsum_idxs_map(inputs: List[EinsumInputSpec]) -> IdxsMap:
 
     return idxs_map
 
-def einsum_spec(equation: str, input_shapes: List[Shape], output_shape: Shape) -> EinsumSpec:
+def einsum_spec(equation: str, ishapes: List[Shape], oshape: Shape) -> EinsumSpec:
     io = equation.split("->")
     assert 1 <= len(io) <= 2, f"multiple arrows in '{equation}'"
-    output_formula = io[1] if len(io) == 2 else None
-    input_formulas = io[0].split(",")
-    assert len(input_formulas) == len(input_shapes), "# equation inputs != # input shapes"
-    inputs = [ einsum_input(*p) for p in zip(input_formulas, input_shapes) ]
-    idxs_map = einsum_idxs_map(inputs)
-    output = einsum_output(idxs_map, inputs, output_formula, output_shape)
-    return EinsumSpec(idxs_map, inputs, output)
+    oformula = io[1] if len(io) == 2 else None
+    iformulas = io[0].split(",")
+    assert len(iformulas) == len(ishapes), "# equation inputs != # input shapes"
+    ispecs = [ einsum_input(*p) for p in zip(iformulas, ishapes) ]
+    idxs_map = einsum_idxs_map(ispecs)
+    ospec = einsum_output(idxs_map, ispecs, oformula, oshape)
+    return EinsumSpec(idxs_map, ispecs, ospec)
 
 def einsum_input_idxs(input_spec: EinsumInputSpec):
     count = len(input_spec.leading_idxs) + len(input_spec.trailing_idxs)
@@ -259,7 +259,6 @@ def einsum_execute(spec: EinsumSpec, tensors: List[Tensor]) -> Tensor:
         return recurse(in_only_idxs)
 
     return einsum_tensor_frompos(fn, spec.output.shape)
-
 
 
 def einsum_test():
@@ -379,6 +378,7 @@ def einsum_test():
     assert eqT(t1_0, einsum_execute(ES({8:1},[EIS((1,),[8],[])],EOS((1,),[8])),[t1_0]))
 
     print("einsum_test() end")
+
 
 if __name__ == "__main__":
    einsum_test()
