@@ -10,7 +10,7 @@ class TestCase(unittest.TestCase):
             self.assertRaises(AssertionError, fn, *args, **kwargs)
 
         def expect(expected, result: Any = True, msg: Optional[str] = None):
-            self.assertEquals(expected, result, msg=msg)
+            self.assertEqual(expected, result, msg=msg)
 
         EIS = EinsumInputSpec
         EOS = EinsumOutputSpec
