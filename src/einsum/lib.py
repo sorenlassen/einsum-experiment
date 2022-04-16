@@ -2,6 +2,7 @@ from dataclasses import dataclass
 from typing import List, Tuple, Dict, Optional, Callable
 import math
 import numpy as np
+import string
 
 Shape = Tuple[int,...]
 Idxs = List[int]
@@ -77,27 +78,17 @@ class EinsumSpec:
     # output is an instance of EinsumOutputSpec
     output: EinsumOutputSpec
 
-EINSUM_LETTERS_UPPER = 26 # oounts upper case letters A-Z
-EINSUM_LETTERS_LOWER = 26 # counts lower case letters a-z
-EINSUM_LETTERS = EINSUM_LETTERS_UPPER + EINSUM_LETTERS_LOWER
+EINSUM_LETTERS_UPPER = string.ascii_uppercase # A-Z
+EINSUM_LETTERS_LOWER = string.ascii_lowercase # a-z
+EINSUM_LETTERS = EINSUM_LETTERS_UPPER + EINSUM_LETTERS_LOWER # A-Za-z
 
 def einsum_index(letter: str) -> int:
-    if "A" <= letter and letter <= "Z":
-        x = ord(letter) - ord("A")
-        assert 0 <= x < EINSUM_LETTERS_UPPER
-        return x
-    elif "a" <= letter and letter <= "z":
-        x = ord(letter) - ord("a")
-        assert 0 <= x < EINSUM_LETTERS_LOWER
-        return EINSUM_LETTERS_UPPER + x
-    assert False, f"index '{letter}' ({ord(letter)}) is not a letter"
+    assert letter in EINSUM_LETTERS, f"index '{letter}' ({ord(letter)}) is not a valid einsum letter"
+    return EINSUM_LETTERS.index(letter)
 
 def einsum_letter(idx: int) -> str:
-    assert 0 <= idx < EINSUM_LETTERS
-    if idx < EINSUM_LETTERS_UPPER:
-        return chr(ord("A") + idx)
-    else:
-        return chr(ord("a") + idx - EINSUM_LETTERS_UPPER)
+    assert 0 <= idx < len(EINSUM_LETTERS)
+    return EINSUM_LETTERS[idx]
 
 def einsum_idxs(formula: str) -> Idxs:
     return [ einsum_index(letter) for letter in formula ]
@@ -106,7 +97,7 @@ def einsum_infer_output_formula( \
         idxs_map: IdxsMap, \
         ispecs: List[EinsumInputSpec]) -> str:
     # count occurrences of letter indices in inputs
-    idxs_count = [0] * EINSUM_LETTERS
+    idxs_count = [0] * len(EINSUM_LETTERS)
     for spec in ispecs:
         for idxs in (spec.leading_idxs, spec.trailing_idxs):
             for idx in idxs:
