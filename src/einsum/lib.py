@@ -162,7 +162,7 @@ def einsum_input(formula: str, shape: Shape) -> EinsumInputSpec:
 
 def einsum_extend_idxs_map(idxs_map: IdxsMap, idx: int, n: int) -> IdxsMap:
     old = idxs_map.get(idx)
-    if old == None or old == 1:
+    if old is None or old == 1:
         idxs_map[idx] = n
     else:
         assert n == 1 or n == old, f"cannot unify magnitudes {old}, {n}"
