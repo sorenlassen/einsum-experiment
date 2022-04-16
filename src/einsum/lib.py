@@ -82,9 +82,11 @@ EINSUM_LETTERS_UPPER = string.ascii_uppercase # A-Z
 EINSUM_LETTERS_LOWER = string.ascii_lowercase # a-z
 EINSUM_LETTERS = EINSUM_LETTERS_UPPER + EINSUM_LETTERS_LOWER # A-Za-z
 
+EINSUM_LETTER2IDX = dict(zip(EINSUM_LETTERS, range(len(EINSUM_LETTERS))))
+
 def einsum_index(letter: str) -> int:
-    assert letter in EINSUM_LETTERS, f"index '{letter}' ({ord(letter)}) is not a valid einsum letter"
-    return EINSUM_LETTERS.index(letter)
+    assert letter in EINSUM_LETTER2IDX, f"index '{letter}' ({ord(letter)}) is not a valid einsum letter"
+    return EINSUM_LETTER2IDX[letter]
 
 def einsum_letter(idx: int) -> str:
     assert 0 <= idx < len(EINSUM_LETTERS)
