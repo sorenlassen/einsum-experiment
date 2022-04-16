@@ -40,9 +40,15 @@ python3 -m mypy src/einsum/lib.py
 ## Release
 
 To publish a new release to pypi:
-```
+```bash
 pip3 install python-semantic-release
+
+# bump the version number and push a new git tag.
 semantic-release publish
+
+# publish to pypi.
+poetry build
+poetry publish
 ```
 
 ## About
