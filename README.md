@@ -8,9 +8,8 @@ pip3 install -U einsum
 ```
 
 Or develop locally:
-
 ```bash
-https://github.com/sorenlassen/einsum-experiment ~/einsum
+git clone https://github.com/sorenlassen/einsum-experiment ~/einsum
 cd ~/einsum
 python3 setup.py develop
 ```
