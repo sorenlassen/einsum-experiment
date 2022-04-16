@@ -93,8 +93,8 @@ def einsum_letter(idx: int) -> str:
 def einsum_idxs(formula: str) -> Idxs:
     return [ einsum_index(letter) for letter in formula ]
 
-def einsum_infer_output_formula( \
-        idxs_map: IdxsMap, \
+def einsum_infer_output_formula(
+        idxs_map: IdxsMap,
         ispecs: List[EinsumInputSpec]) -> str:
     # count occurrences of letter indices in inputs
     idxs_count = [0] * len(EINSUM_LETTERS)
@@ -119,9 +119,9 @@ def einsum_find_duplicate(letters: str) -> Optional[str]:
 def einsum_ellipsis_idxs(idxs_map: IdxsMap) -> Idxs:
     return sorted([ idx for idx in idxs_map if idx < 0 ])
 
-def einsum_output( \
-        idxs_map: IdxsMap, \
-        ispecs: List[EinsumInputSpec], \
+def einsum_output(
+        idxs_map: IdxsMap,
+        ispecs: List[EinsumInputSpec],
         formula: Optional[str]) \
         -> EinsumOutputSpec:
     lst = None
