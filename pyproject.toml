@@ -1,6 +1,6 @@
 [tool.poetry]
 name = "einsum"
-version = "0.2.3"
+version = "0.2.4"
 homepage = "https://github.com/sorenlassen/einsum-experiment"
 description = "Experimental implementation of torch/onnx einsum"
 authors = ["Soren Lassen <sorenlassen@gmail.com>"]
