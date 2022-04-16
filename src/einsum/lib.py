@@ -124,7 +124,6 @@ def einsum_output(
         ispecs: List[EinsumInputSpec],
         formula: Optional[str]) \
         -> EinsumOutputSpec:
-    lst = None
     if formula is None:
         formula = einsum_infer_output_formula(idxs_map, ispecs)
         assert formula.startswith("...")
