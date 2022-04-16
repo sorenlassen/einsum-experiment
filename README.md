@@ -42,8 +42,14 @@ To publish a new release to pypi:
 ```bash
 pip3 install python-semantic-release
 
-# bump the version number and push a new git tag.
-semantic-release publish
+# verify tests pass.
+pytest
+
+# bump the version number, add a git tag.
+semantic-release version --patch # or --minor, or --major
+
+# push the new version number and tag to github.
+git push && git push --tags
 
 # publish to pypi.
 poetry build
