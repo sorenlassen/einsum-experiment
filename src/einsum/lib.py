@@ -34,38 +34,27 @@ def einsum_tensor_frompos(fn: Callable[..., float], shape: Shape) -> Tensor:
 @dataclass
 class EinsumOutputSpec:
 
-    # tuple of magnitudes (non-negative integers)
+    # tuple of dimensions (non-negative integers)
     shape: Shape
 
-    # idxs is a list of integers in the output with [0,52) referring to
-    # regular indices (representing upper and lower case letters) and
-    # consecutive negative indices representing ellipsis
+    # idxs is a list of integers in [0,52) representing letters and
+    # of consecutive negative integers from -1 and down representing an ellipsis
     idxs: Idxs
 
 @dataclass
 class EinsumInputSpec:
 
-    # tuple of magnitudes
+    # tuple of dimensions
     shape: Shape
 
-    # leading_idxs is a list of integers in [0,52), namely all indices at the
-    # beginning of the input up to the ellipsis, if any, otherwise to the end of
-    # the input
-    leading_idxs: Idxs
-
-    # trailing_idxs is a list of integers in [0,52) in the input after any
-    # ellipsis
-    trailing_idxs: Idxs
-
-    def ellipsis_shape(self) -> Shape:
-        begin = len(self.leading_idxs)
-        end = len(self.shape) - len(self.trailing_idxs)
-        return self.shape[begin:end]
+    # idxs is a list of integers in [0,52) representing letters and
+    # of consecutive negative integers from -1 and down representing an ellipsis
+    idxs: Idxs
 
 @dataclass
 class EinsumSpec:
 
-    # idxs_map maps indices to magnitudes, where an index
+    # idxs_map maps indices to dimensions, where an index
     #   is an integer with [0,52) ranging over upper and lower case letters
     #   (e.g. A and Z are 0 and 25, a and z are 26 and 51) and with
     #   negative integers ranging over the indices of the ellipsis, if any
@@ -99,8 +88,8 @@ def einsum_infer_output_formula(
     # count occurrences of letter indices in inputs
     idxs_count = [0] * len(EINSUM_LETTERS)
     for spec in ispecs:
-        for idxs in (spec.leading_idxs, spec.trailing_idxs):
-            for idx in idxs:
+        for idx in spec.idxs:
+            if idx >= 0:
                 idxs_count[idx] += 1
     formula = "..."
     for idx in idxs_map:
@@ -158,39 +147,24 @@ def einsum_input(formula: str, shape: Shape) -> EinsumInputSpec:
             f"# indices in '{formula}' > length of shape {list(shape)}"
     leading_idxs = einsum_idxs(lst[0])
     trailing_idxs = einsum_idxs(lst[1])
-    return EinsumInputSpec(shape, leading_idxs, trailing_idxs)
+    letters_len = len(leading_idxs) + len(trailing_idxs)
+    ellipsis_len = len(shape) - len(leading_idxs) - len(trailing_idxs)
+    ellipsis_idxs = list(range(-ellipsis_len, 0))
+    return EinsumInputSpec(shape, leading_idxs + ellipsis_idxs + trailing_idxs)
 
 def einsum_extend_idxs_map(idxs_map: IdxsMap, idx: int, n: int) -> IdxsMap:
     old = idxs_map.get(idx)
     if old is None or old == 1:
         idxs_map[idx] = n
     else:
-        assert n == 1 or n == old, f"cannot unify magnitudes {old}, {n}"
+        assert n == 1 or n == old, f"cannot unify dimensions {old}, {n}"
     return idxs_map
 
 def einsum_idxs_map(ispecs: List[EinsumInputSpec]) -> IdxsMap:
     idxs_map: IdxsMap = {}
-
     for spec in ispecs:
-        # process leading indices
-        leading = spec.leading_idxs
-        for x in range(len(leading)):
-            idx = leading[x]
-            n = spec.shape[x]
+        for idx, n in zip(spec.idxs, spec.shape):
             einsum_extend_idxs_map(idxs_map, idx, n)
-        # process trailing indices
-        trailing = spec.trailing_idxs
-        offset = len(spec.shape) - len(trailing)
-        for x in range(len(trailing)):
-            idx = trailing[x]
-            n = spec.shape[offset + x]
-            einsum_extend_idxs_map(idxs_map, idx, n)
-        # process ellipsis
-        eshape = spec.ellipsis_shape()
-        for x in range(len(eshape)):
-            idx = -1 - x
-            einsum_extend_idxs_map(idxs_map, idx, eshape[idx])
-
     return idxs_map
 
 def einsum_spec(equation: str, ishapes: List[Shape]) -> EinsumSpec:
@@ -204,21 +178,11 @@ def einsum_spec(equation: str, ishapes: List[Shape]) -> EinsumSpec:
     ospec = einsum_output(idxs_map, ispecs, oformula)
     return EinsumSpec(idxs_map, ispecs, ospec)
 
-def einsum_input_idxs(input_spec: EinsumInputSpec):
-    count = len(input_spec.leading_idxs) + len(input_spec.trailing_idxs)
-    assert count <= len(input_spec.shape)
-    ellipsis = list(range(count - len(input_spec.shape), 0))
-    idxs = input_spec.leading_idxs + ellipsis + input_spec.trailing_idxs
-    assert len(idxs) == len(input_spec.shape)
-    return idxs
-
-
 def einsum_execute(spec: EinsumSpec, tensors: List[Tensor]) -> Tensor:
     assert len(spec.inputs) == len(tensors)
     for input_spec, tensor in zip(spec.inputs, tensors):
         assert input_spec.shape == tensor.shape
 
-    in_idxs = list(map(einsum_input_idxs, spec.inputs))
     out_idxs = spec.output.idxs
     in_only_idxs = list(set(spec.idxs_map).difference(out_idxs))
     def fn(*opos) -> float:
@@ -228,8 +192,8 @@ def einsum_execute(spec: EinsumSpec, tensors: List[Tensor]) -> Tensor:
         def recurse(remaining_idxs: Idxs) -> float:
             if len(remaining_idxs) == 0:
                 prod = 1.
-                for idxs, tensor in zip(in_idxs, tensors):
-                    pos = [ pos_map[idx] for idx in idxs ]
+                for input_spec, tensor in zip(spec.inputs, tensors):
+                    pos = [ pos_map[idx] for idx in input_spec.idxs ]
                     prod *= tensor.item(*pos)
                 return prod
             else:
