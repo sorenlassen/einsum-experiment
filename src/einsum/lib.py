@@ -14,7 +14,7 @@ def einsum_tensor(x) -> Tensor:
     return np.array(x)
 
 def einsum_empty_tensor(shape: Shape) -> Tensor:
-    return np.broadcast_to(0., shape)
+    return np.empty(shape)
 
 # returns tensor of given shape with value fn(i1,...,iN) at pos (i1...iN)
 def einsum_tensor_frompos(fn: Callable[..., float], shape: Shape) -> Tensor:
