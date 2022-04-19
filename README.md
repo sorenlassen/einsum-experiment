@@ -29,6 +29,11 @@ Run `einsum`'s test suite:
 pip3 install pytest
 pytest
 ```
+or
+```bash
+python3 http://setup.py develop # enables the test file to import einsum
+python3 tests/test_einsum.py
+```
 
 Type check with mypy:
 ```bash
