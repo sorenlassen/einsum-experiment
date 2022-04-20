@@ -14,6 +14,7 @@ class TestCase(unittest.TestCase):
 
     def eq(self, expected, result, msg: Optional[str] = None):
         if isinstance(expected, Tensor):
+            msg = f"expected={expected}, result={result}" if msg is None else msg
             self.assertTrue(np.array_equal(expected, result), msg=msg)
         else:
             self.assertEqual(expected, result, msg=msg)
@@ -142,7 +143,11 @@ class TestCase(unittest.TestCase):
         self.eq(t1_0, einsum("I",[t1_0]))
         t12 = einsum_tensor([[1.1, 1.2]])
         t21 = einsum_tensor([[1.1], [2.1]])
+        t22 = t21 @ t12
         self.eq(t12 @ t21, einsum("ij,jk", [t12, t21]))
+        self.eq((t12 @ t21)[0,0], einsum("ij,jk->", [t12, t21]))
+        self.eq(t22.diagonal(), einsum("ii->i", [t22]))
+        self.eq(t22.trace(), einsum("ii", [t22]))
 
 if __name__ == '__main__':
     unittest.main()
