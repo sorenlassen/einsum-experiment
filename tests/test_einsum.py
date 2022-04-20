@@ -90,12 +90,12 @@ class TestCase(unittest.TestCase):
         self.eq({-3:3,-2:4,-1:5,8:2,9:6}, einsum_idxs_map([eI_245,e_J456,e_315,e_]))
         self.fails(lambda: einsum_idxs_map([e_315,e_2]))
 
-    def test_einsum_infer_output_formula(self):
-        self.eq("...", einsum_infer_output_formula({}, []))
-        self.eq("...I", einsum_infer_output_formula({8:2}, [EIS((2,),[8])]))
-        self.eq("...I", einsum_infer_output_formula({-1:3,8:2}, [EIS((2,3),[8,-1])]))
-        self.eq("...", einsum_infer_output_formula({8:2}, [EIS((2,2),[8,8])]))
-        self.eq("...", einsum_infer_output_formula({8:2}, [EIS((2,),[8]), EIS((2,),[8])]))
+    def test_einsum_infer_output_subscripts(self):
+        self.eq("...", einsum_infer_output_subscripts({}, []))
+        self.eq("...I", einsum_infer_output_subscripts({8:2}, [EIS((2,),[8])]))
+        self.eq("...I", einsum_infer_output_subscripts({-1:3,8:2}, [EIS((2,3),[8,-1])]))
+        self.eq("...", einsum_infer_output_subscripts({8:2}, [EIS((2,2),[8,8])]))
+        self.eq("...", einsum_infer_output_subscripts({8:2}, [EIS((2,),[8]), EIS((2,),[8])]))
 
     def test_einsum_output(self):
         self.eq(EOS((),[]), einsum_output({}, [], ""))

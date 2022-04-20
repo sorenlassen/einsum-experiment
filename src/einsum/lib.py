@@ -79,10 +79,10 @@ def einsum_letter(idx: int) -> str:
     assert 0 <= idx < len(EINSUM_LETTERS)
     return EINSUM_LETTERS[idx]
 
-def einsum_idxs(formula: str) -> Idxs:
-    return [ einsum_index(letter) for letter in formula ]
+def einsum_idxs(subscripts: str) -> Idxs:
+    return [ einsum_index(letter) for letter in subscripts ]
 
-def einsum_infer_output_formula(
+def einsum_infer_output_subscripts(
         idxs_map: IdxsMap,
         ispecs: List[EinsumInputSpec]) -> str:
     # count occurrences of letter indices in inputs
@@ -91,11 +91,11 @@ def einsum_infer_output_formula(
         for idx in spec.idxs:
             if idx >= 0:
                 idxs_count[idx] += 1
-    formula = "..."
+    subscripts = "..."
     for idx in idxs_map:
         if idxs_count[idx] == 1:
-            formula += einsum_letter(idx)
-    return formula
+            subscripts += einsum_letter(idx)
+    return subscripts
 
 def einsum_find_duplicate(letters: str) -> Optional[str]:
     if len(letters) > 1:
@@ -111,19 +111,19 @@ def einsum_ellipsis_idxs(idxs_map: IdxsMap) -> Idxs:
 def einsum_output(
         idxs_map: IdxsMap,
         ispecs: List[EinsumInputSpec],
-        formula: Optional[str]) \
+        subscripts: Optional[str]) \
         -> EinsumOutputSpec:
-    if formula is None:
-        formula = einsum_infer_output_formula(idxs_map, ispecs)
-        assert formula.startswith("...")
-        trailing = formula[len("..."):]
+    if subscripts is None:
+        subscripts = einsum_infer_output_subscripts(idxs_map, ispecs)
+        assert subscripts.startswith("...")
+        trailing = subscripts[len("..."):]
         assert trailing.count(".") == trailing.count(" ") == 0
         lst = ["", trailing]
     else:
-        lst = [ s.replace(" ", "") for s in formula.split("...") ]
-        assert 1 <= len(lst) <= 2, f"multiple ellipses in '{formula}'"
+        lst = [ s.replace(" ", "") for s in subscripts.split("...") ]
+        assert 1 <= len(lst) <= 2, f"multiple ellipses in '{subscripts}'"
         duplicate = einsum_find_duplicate("".join(lst))
-        assert duplicate is None, f"duplicate index {duplicate} in '{formula}'"
+        assert duplicate is None, f"duplicate index {duplicate} in '{subscripts}'"
 
     idxs = [ einsum_index(letter) for letter in lst[0] ]
     if len(lst) == 2:
@@ -135,16 +135,16 @@ def einsum_output(
 
     return EinsumOutputSpec(shape, idxs)
 
-def einsum_input(formula: str, shape: Shape) -> EinsumInputSpec:
-    lst = [ s.replace(" ", "") for s in formula.split("...") ]
+def einsum_input(subscripts: str, shape: Shape) -> EinsumInputSpec:
+    lst = [ s.replace(" ", "") for s in subscripts.split("...") ]
     if len(lst) == 1:
         assert len(lst[0]) == len(shape), \
-            f"# indices in '{formula}' != length of shape {list(shape)}"
+            f"# indices in '{subscripts}' != length of shape {list(shape)}"
         lst.append("") # treat this case the same as an empty ellipsis at end
     else:
-        assert len(lst) == 2, f"multiple ellipses in '{formula}'"
+        assert len(lst) == 2, f"multiple ellipses in '{subscripts}'"
         assert len(lst[0]) + len(lst[1]) <= len(shape), \
-            f"# indices in '{formula}' > length of shape {list(shape)}"
+            f"# indices in '{subscripts}' > length of shape {list(shape)}"
     leading_idxs = einsum_idxs(lst[0])
     trailing_idxs = einsum_idxs(lst[1])
     letters_len = len(leading_idxs) + len(trailing_idxs)
@@ -170,12 +170,12 @@ def einsum_idxs_map(ispecs: List[EinsumInputSpec]) -> IdxsMap:
 def einsum_spec(equation: str, ishapes: List[Shape]) -> EinsumSpec:
     io = equation.split("->")
     assert 1 <= len(io) <= 2, f"multiple arrows in '{equation}'"
-    oformula = io[1] if len(io) == 2 else None
-    iformulas = io[0].split(",")
-    assert len(iformulas) == len(ishapes), "# equation inputs != # input shapes"
-    ispecs = [ einsum_input(*p) for p in zip(iformulas, ishapes) ]
+    osubscripts = io[1] if len(io) == 2 else None
+    isubscripts = io[0].split(",")
+    assert len(isubscripts) == len(ishapes), "# equation inputs != # input shapes"
+    ispecs = [ einsum_input(*p) for p in zip(isubscripts, ishapes) ]
     idxs_map = einsum_idxs_map(ispecs)
-    ospec = einsum_output(idxs_map, ispecs, oformula)
+    ospec = einsum_output(idxs_map, ispecs, osubscripts)
     return EinsumSpec(idxs_map, ispecs, ospec)
 
 def einsum_execute(spec: EinsumSpec, tensors: List[Tensor]) -> Tensor:
