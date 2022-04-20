@@ -140,6 +140,9 @@ class TestCase(unittest.TestCase):
         self.eq(t0_0, einsum("I->I",[t0_0]))
         self.eq(t_0, einsum("I->",[t1_0]))
         self.eq(t1_0, einsum("I",[t1_0]))
+        t12 = einsum_tensor([[1.1, 1.2]])
+        t21 = einsum_tensor([[1.1], [2.1]])
+        self.eq(t12 @ t21, einsum("ij,jk", [t12, t21]))
 
 if __name__ == '__main__':
     unittest.main()
