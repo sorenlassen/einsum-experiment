@@ -11,7 +11,7 @@ Tensor = np.ndarray
 
 
 def einsum_tensor(x) -> Tensor:
-    return np.array(x)
+    return np.asarray(x)
 
 def einsum_empty_tensor(shape: Shape) -> Tensor:
     return np.empty(shape)
