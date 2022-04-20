@@ -146,6 +146,7 @@ class TestCase(unittest.TestCase):
         t22 = t21 @ t12
         self.eq(t12 @ t21, einsum("ij,jk", [t12, t21]))
         self.eq((t12 @ t21)[0,0], einsum("ij,jk->", [t12, t21]))
+        self.eq(t22.sum(axis=0), einsum("ij->j", [t22]))
         self.eq(t22.diagonal(), einsum("ii->i", [t22]))
         self.eq(t22.trace(), einsum("ii", [t22]))
 
