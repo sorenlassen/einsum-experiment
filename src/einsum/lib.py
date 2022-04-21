@@ -209,7 +209,7 @@ def einsum_execute(spec: EinsumSpec, tensors: List[Tensor]) -> Tensor:
 
     return einsum_tensor_frompos(fn, spec.output.shape)
 
-def einsum(equation: str, tensors: List[Tensor]) -> Tensor:
+def einsum(equation: str, *tensors: Tensor) -> Tensor:
     ishapes = [ tensor.shape for tensor in tensors ]
     spec = einsum_spec(equation, ishapes)
-    return einsum_execute(spec, tensors)
+    return einsum_execute(spec, list(tensors))
