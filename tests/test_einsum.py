@@ -173,6 +173,28 @@ class TestCase(unittest.TestCase):
         eqn2 = "abij,abjk->abik"
         self.eq(np.einsum(eqn2, s, t), einsum(eqn2, s, t))
 
+    def test_einsum_is_identity_spec(self):
+        self.assertTrue(einsum_is_identity_spec(einsum_spec("...",[(1,2,3)])))
+        self.assertTrue(einsum_is_identity_spec(einsum_spec("...jk",[(1,2,3)])))
+        self.assertTrue(einsum_is_identity_spec(einsum_spec("ijk",[(1,2,3)])))
+        self.assertTrue(einsum_is_identity_spec(einsum_spec("ijk->ijk",[(1,2,3)])))
+        self.assertFalse(einsum_is_identity_spec(einsum_spec("ijk->ikj",[(1,2,3)])))
+
+    def test_einsum_rewrite_diagonal(self):
+        t12 = einsum_tensor([[1.1, 1.2]])
+        t21 = einsum_tensor([[1.1], [2.1]])
+        t22 = t21 @ t12
+        src_spec = einsum_spec("ii->i",[t22.shape])
+        dest_spec = einsum_spec("i->i", [(2,)])
+        self.maxDiff = None
+        self.eq((src_spec, dest_spec), einsum_rewrite_diagonal(src_spec, 0, 0, 1)[:2])
+        self.eq(t22.diagonal(), einsum_rewrite_diagonal(src_spec, 0, 0, 1)[2]([t22])[0])
+
+    def test_einsum_rewrites(self):
+        t12 = einsum_tensor([[1.1, 1.2]])
+        self.eq([], einsum_rewrites(einsum_spec("...",t12)))
+        # TODO: test things that actually rewrite
+
 if __name__ == '__main__':
     unittest.main()
 

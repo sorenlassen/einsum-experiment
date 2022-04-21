@@ -1,4 +1,5 @@
 from dataclasses import dataclass
+from copy import deepcopy
 from typing import List, Tuple, Dict, Optional, Callable
 import math
 import numpy as np
@@ -248,3 +249,49 @@ def einsum(equation: str, *tensors: Tensor) -> Tensor:
     ishapes = [ tensor.shape for tensor in tensors ]
     spec = einsum_spec(equation, ishapes)
     return einsum_execute(spec, list(tensors))
+
+
+def einsum_is_identity_spec(spec: EinsumSpec) -> bool:
+    return len(spec.inputs) == 1 and spec.inputs[0].idxs == spec.output.idxs
+
+# an einsum rewrite takes src and dest EinsumSpec and a transform function
+# that maps a list of src tensors to a list of dest tensors, where the
+# src and dest tensor lists match the src and dest input specs
+# TODO: change EinsumRewrite to a dataclass
+Tensors = List[Tensor]
+EinsumTransform = Callable[[Tensors],Tensors]
+EinsumRewrite = Tuple[EinsumSpec,EinsumSpec,EinsumTransform]
+
+def einsum_rewrite_diagonal(src_spec: EinsumSpec,
+        arg: int, axis1: int, axis2: int) -> EinsumRewrite:
+    assert 0 <= arg < len(src_spec.inputs)
+    src_shape = src_spec.inputs[arg].shape
+    src_idxs = src_spec.inputs[arg].idxs
+    assert 0 <= axis1 <= axis2 < len(src_shape)
+    dim = src_shape[axis1]
+    idx = src_idxs[axis1]
+    assert dim == src_shape[axis2]
+    assert idx == src_idxs[axis2]
+    dest_spec = deepcopy(src_spec)
+    dest_ispec = dest_spec.inputs[arg]
+    # dest_ispec.shape is an immutable tuple, so we make it a list to
+    # mutate it and then write it back as a tuple
+    shape = list(dest_ispec.shape)
+    shape.pop(axis2)
+    shape.pop(axis1)
+    shape.append(dim)
+    dest_ispec.shape = tuple(shape)
+    # dest_ispec.idxs is a list and we mutate it in place
+    idxs = dest_ispec.idxs
+    idxs.pop(axis2)
+    idxs.pop(axis1)
+    idxs.append(idx)
+    def transform(ts : Tensors) -> Tensors:
+        ts[arg] = ts[arg].diagonal(axis1=axis1, axis2=axis2)
+        return ts
+    return (src_spec, dest_spec, transform)
+
+def einsum_rewrites(spec: EinsumSpec) -> List[EinsumRewrite]:
+    rewrites : List[EinsumRewrite] = []
+    # TODO: append bunch of rewrites
+    return rewrites
