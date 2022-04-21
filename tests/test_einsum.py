@@ -149,6 +149,7 @@ class TestCase(unittest.TestCase):
         self.eq(t22.sum(axis=0), einsum("ij->j", t22))
         self.eq(t22.diagonal(), einsum("ii->i", t22))
         self.eq(t22.trace(), einsum("ii", t22))
+        self.fails(lambda: einsum("ii", t12))
 
 if __name__ == '__main__':
     unittest.main()

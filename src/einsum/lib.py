@@ -150,7 +150,13 @@ def einsum_input(subscripts: str, shape: Shape) -> EinsumInputSpec:
     letters_len = len(leading_idxs) + len(trailing_idxs)
     ellipsis_len = len(shape) - len(leading_idxs) - len(trailing_idxs)
     ellipsis_idxs = list(range(-ellipsis_len, 0))
-    return EinsumInputSpec(shape, leading_idxs + ellipsis_idxs + trailing_idxs)
+    idxs = leading_idxs + ellipsis_idxs + trailing_idxs
+    # following numpy and torch, don't broadcast-match the shapes of multiple
+    # occurrences of a subscript index within the same operand
+    for idx, dim in zip(idxs, shape):
+        assert dim == shape[idxs.index(idx)], \
+                f"operand has repeated subscript {einsum_letter(idx)} with different shape sizes"
+    return EinsumInputSpec(shape, idxs)
 
 def einsum_extend_idxs_map(idxs_map: IdxsMap, idx: int, n: int) -> IdxsMap:
     old = idxs_map.get(idx)
