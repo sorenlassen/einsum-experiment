@@ -16,6 +16,9 @@ def einsum_tensor(x) -> Tensor:
 def einsum_empty_tensor(shape: Shape) -> Tensor:
     return np.empty(shape)
 
+def einsum_broadcast_to(t: Tensor, shape: Shape) -> Tensor:
+    return np.broadcast_to(t, shape)
+
 # returns tensor of given shape with value fn(i1,...,iN) at pos (i1...iN)
 def einsum_tensor_frompos(fn: Callable[..., float], shape: Shape) -> Tensor:
     if math.prod(shape) == 0:
@@ -195,6 +198,10 @@ def einsum_execute(spec: EinsumSpec, tensors: List[Tensor]) -> Tensor:
     assert len(spec.inputs) == len(tensors)
     for input_spec, tensor in zip(spec.inputs, tensors):
         assert input_spec.shape == tensor.shape
+
+    broadcast_shapes : List[Shape] = \
+        [ tuple( spec.idxs_map[idx] for idx in ispec.idxs ) for ispec in spec.inputs ]
+    tensors = [ einsum_broadcast_to(t, shape) for t, shape in zip(tensors, broadcast_shapes) ]
 
     out_idxs = spec.output.idxs
     in_only_idxs = list(set(spec.idxs_map).difference(out_idxs))
