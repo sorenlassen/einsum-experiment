@@ -31,7 +31,7 @@ pytest
 ```
 or
 ```bash
-python3 http://setup.py develop # enables the test file to import einsum
+python3 setup.py develop # enables the test file to import einsum
 python3 tests/test_einsum.py
 ```
 
