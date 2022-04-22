@@ -18,17 +18,17 @@ def einsum_empty_tensor(shape: Shape) -> Tensor:
 
 # returns tensor of given shape with value fn(i1,...,iN) at pos (i1...iN)
 def einsum_tensor_frompos(fn: Callable[..., float], shape: Shape) -> Tensor:
-   if math.prod(shape) == 0:
-       return einsum_empty_tensor(shape)
+    if math.prod(shape) == 0:
+        return einsum_empty_tensor(shape)
 
-   def recurse(pos: List[int], shape: Shape):
-       if len(shape) == 0:
-           return fn(*pos)
-       else:
-           remainder = shape[1:]
-           return [ recurse(pos + [i], remainder) for i in range(shape[0]) ]
+    def recurse(pos: List[int], shape: Shape):
+        if len(shape) == 0:
+            return fn(*pos)
+        else:
+            remainder = shape[1:]
+            return [ recurse(pos + [i], remainder) for i in range(shape[0]) ]
 
-   return einsum_tensor(recurse([], shape))
+    return einsum_tensor(recurse([], shape))
 
 
 @dataclass
