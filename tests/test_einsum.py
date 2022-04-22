@@ -15,6 +15,7 @@ class TestCase(unittest.TestCase):
     def eq(self, expected, result, msg: Optional[str] = None):
         if isinstance(expected, Tensor):
             msg = f"expected={expected}, result={result}" if msg is None else msg
+            # works for now but allclose might be more robust
             self.assertTrue(np.array_equal(expected, result), msg=msg)
         else:
             self.assertEqual(expected, result, msg=msg)
@@ -150,6 +151,11 @@ class TestCase(unittest.TestCase):
         self.eq(t22.diagonal(), einsum("ii->i", t22))
         self.eq(t22.trace(), einsum("ii", t22))
         self.fails(lambda: einsum("ii", t12))
+
+    def test_broadcast(self): # see issue #4
+        s, t = np.random.rand(11, 1, 5, 3), np.random.rand(1, 7, 3, 2)
+        e = einsum('...ij,...jk->...ik', s, t)
+        self.eq(np.einsum('...ij,...jk->...ik', s, t), e)
 
 if __name__ == '__main__':
     unittest.main()
