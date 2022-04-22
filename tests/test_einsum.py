@@ -154,8 +154,10 @@ class TestCase(unittest.TestCase):
 
     def test_broadcast(self): # see issue #4
         s, t = np.random.rand(11, 1, 5, 3), np.random.rand(1, 7, 3, 2)
-        e = einsum('...ij,...jk->...ik', s, t)
-        self.eq(np.einsum('...ij,...jk->...ik', s, t), e)
+        eqn1 = "...ij,...jk->...ik"
+        self.eq(np.einsum(eqn1, s, t), einsum(eqn1, s, t))
+        eqn2 = "abij,abjk->abik"
+        self.eq(np.einsum(eqn2, s, t), einsum(eqn2, s, t))
 
 if __name__ == '__main__':
     unittest.main()
