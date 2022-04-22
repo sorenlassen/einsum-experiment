@@ -1,6 +1,6 @@
 from dataclasses import dataclass
 from copy import deepcopy
-from typing import List, Tuple, Dict, Optional, Callable
+from typing import Iterable, List, Tuple, Dict, Optional, Callable, TypeVar
 import math
 import numpy as np
 import string
@@ -101,13 +101,16 @@ def einsum_infer_output_subscripts(
             subscripts += einsum_letter(idx)
     return subscripts
 
+E = TypeVar('E')
+def einsum_count_elements(elements: Iterable[E]) -> Dict[E,int]:
+    counts : Dict[E,int] = {}
+    for x in elements:
+        counts[x] = counts.get(x, 0) + 1
+    return counts
+
 def einsum_find_duplicate(letters: str) -> Optional[str]:
-    if len(letters) > 1:
-        s = sorted(letters)
-        for x in range(len(s) - 1):
-            if s[x] == s[x + 1]:
-                return s[x]
-    return None
+    counts = einsum_count_elements(letters)
+    return next((x for x, y in counts.items() if y > 1), None)
 
 def einsum_ellipsis_idxs(idxs_map: IdxsMap) -> Idxs:
     return sorted([ idx for idx in idxs_map if idx < 0 ])
@@ -290,6 +293,7 @@ def einsum_rewrite_diagonal(src_spec: EinsumSpec,
         ts[arg] = ts[arg].diagonal(axis1=axis1, axis2=axis2)
         return ts
     return (src_spec, dest_spec, transform)
+
 
 def einsum_rewrites(spec: EinsumSpec) -> List[EinsumRewrite]:
     rewrites : List[EinsumRewrite] = []
