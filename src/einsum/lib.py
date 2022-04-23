@@ -194,17 +194,32 @@ def einsum_spec(equation: str, ishapes: List[Shape]) -> EinsumSpec:
     ospec = einsum_output(idxs_map, ispecs, osubscripts)
     return EinsumSpec(idxs_map, ispecs, ospec)
 
+def einsum_squeeze_input_spec(input_spec: EinsumInputSpec) -> EinsumInputSpec:
+    shape = list(input_spec.shape)
+    idxs = list(input_spec.idxs)
+    while 1 in shape:
+        p = shape.index(1)
+        del shape[p]
+        del idxs[p]
+    return EinsumInputSpec(tuple(shape), idxs)
+
 def einsum_execute(spec: EinsumSpec, tensors: List[Tensor]) -> Tensor:
-    assert len(spec.inputs) == len(tensors)
-    for input_spec, tensor in zip(spec.inputs, tensors):
+    idxs_map = spec.idxs_map
+    inputs = spec.inputs
+    output = spec.output
+    assert len(inputs) == len(tensors)
+    for input_spec, tensor in zip(inputs, tensors):
         assert input_spec.shape == tensor.shape
 
-    broadcast_shapes : List[Shape] = \
-        [ tuple( spec.idxs_map[idx] for idx in ispec.idxs ) for ispec in spec.inputs ]
-    tensors = [ einsum_broadcast_to(t, shape) for t, shape in zip(tensors, broadcast_shapes) ]
+    # squeeze inputs to avoid multiplying over axes of length 1 which
+    # which may, through broadcast, have different length in idxs_map
+    inputs = list(map(einsum_squeeze_input_spec, inputs))
+    tensors = [tensor.squeeze() for tensor in tensors]
+    for input_spec, tensor in zip(inputs, tensors):
+        assert input_spec.shape == tensor.shape
 
-    out_idxs = spec.output.idxs
-    in_only_idxs = list(set(spec.idxs_map).difference(out_idxs))
+    out_idxs = output.idxs
+    in_only_idxs = list(set(idxs_map).difference(out_idxs))
     def fn(*opos) -> float:
         assert len(opos) == len(out_idxs)
         pos_map = dict(zip(out_idxs, opos))
@@ -212,7 +227,7 @@ def einsum_execute(spec: EinsumSpec, tensors: List[Tensor]) -> Tensor:
         def recurse(remaining_idxs: Idxs) -> float:
             if len(remaining_idxs) == 0:
                 prod = 1.
-                for input_spec, tensor in zip(spec.inputs, tensors):
+                for input_spec, tensor in zip(inputs, tensors):
                     pos = [ pos_map[idx] for idx in input_spec.idxs ]
                     prod *= tensor.item(*pos)
                 return prod
@@ -220,14 +235,14 @@ def einsum_execute(spec: EinsumSpec, tensors: List[Tensor]) -> Tensor:
                 head = remaining_idxs[0]
                 tail = remaining_idxs[1:]
                 acc = 0.
-                for p in range(spec.idxs_map[head]):
+                for p in range(idxs_map[head]):
                     pos_map[head] = p
                     acc += recurse(tail)
                 return acc
 
         return recurse(in_only_idxs)
 
-    return einsum_tensor_frompos(fn, spec.output.shape)
+    return einsum_tensor_frompos(fn, output.shape)
 
 def einsum(equation: str, *tensors: Tensor) -> Tensor:
     ishapes = [ tensor.shape for tensor in tensors ]

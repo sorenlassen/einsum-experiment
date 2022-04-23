@@ -123,6 +123,20 @@ class TestCase(unittest.TestCase):
         self.eq(ES({},[EIS((),[])],EOS((),[])), einsum_spec("...->...", [()]))
         self.fails(lambda: einsum_spec("->->", [()]))
 
+    def test_einsum_squeeze_input_spec(self):
+        shapes = [ (), (0,), (1,), (2,), (1,1), (1,2), (2,1), (1,2,1), (2,1,2) ]
+        for shape in shapes:
+            for ellips in [True, False]:
+                t = einsum_tensor(np.random.rand(*shape))
+                subscripts = "..." if ellips else EINSUM_LETTERS[:len(shape)]
+                ispec = einsum_input(subscripts, t.shape)
+                sq = einsum_squeeze_input_spec(ispec)
+                self.eq(sq.shape, t.squeeze().shape)
+                self.eq(len(sq.shape), len(sq.idxs))
+                self.assertGreaterEqual(
+                        set(dict(zip(ispec.idxs, ispec.shape))),
+                        set(dict(zip(sq.idxs, sq.shape))))
+
     def test_einsum_execute(self):
         t_0 = einsum_tensor(0.)
         t0_0 = einsum_tensor([])
