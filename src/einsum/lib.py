@@ -298,7 +298,6 @@ def einsum_rewrites_diagonals(src_spec: EinsumSpec, arg: int) -> List[EinsumRewr
     assert 0 <= arg < len(src_spec.inputs)
     rewrites = []
     idxs = list(src_spec.inputs[arg].idxs)
-    # simpler alternative: for idx in set(idxs): c = idxs.count(idx); ...
     for idx, c in einsum_count_elements(idxs).items():
         while c > 1:
             axis1 = idxs.index(idx)
