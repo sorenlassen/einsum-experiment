@@ -294,8 +294,55 @@ def einsum_rewrite_diagonal(src_spec: EinsumSpec,
         return ts
     return (src_spec, dest_spec, transform)
 
+def einsum_rewrites_diagonals(src_spec: EinsumSpec, arg: int) -> List[EinsumRewrite]:
+    assert 0 <= arg < len(src_spec.inputs)
+    rewrites = []
+    idxs = list(src_spec.inputs[arg].idxs)
+    #for idx, c in einsum_count_elements(idxs).items():
+    #    while c > 1:
+    for idx in set(idxs):
+        c = idxs.count(idx)
+        while c >= 2:
+            axis1 = idxs.index(idx)
+            axis2 = idxs.index(idx, axis1 + 1)
+            rewrite = einsum_rewrite_diagonal(src_spec, arg, axis1, axis2) 
+            rewrites.append(rewrite)
+            prev_spec, next_spec, transform = rewrite
+            assert prev_spec == src_spec
+            src_spec = next_spec
+            c -= 1
+    return rewrites
+
+def einsum_rewrites_multiply(src_spec: EinsumSpec, arg1: int, arg2: int) -> List[EinsumRewrite]:
+    # TODO
+    return []
+
+def einsum_rewrites_sum(src_spec: EinsumSpec, arg: int) -> List[EinsumRewrite]:
+    # TODO
+    return []
 
 def einsum_rewrites(spec: EinsumSpec) -> List[EinsumRewrite]:
     rewrites : List[EinsumRewrite] = []
-    # TODO: append bunch of rewrites
+
+    def last_spec() -> EinsumSpec:
+        assert len(rewrites) > 0
+        penultimate, last, transform =  rewrites[-1]
+        return last
+
+    for arg in range(len(spec.inputs)):
+        rewrites += einsum_rewrites_diagonals(spec, arg)
+        if len(rewrites) > 0:
+            spec = last_spec()
+    # TODO: append bunch of other rewrites
+    if len(spec.inputs) >= 2:
+        for arg in reversed(range(len(spec.inputs) - 1)):
+            rewrites += einsum_rewrites_multiply(spec, arg, arg + 1)
+            if len(rewrites) > 0:
+                spec = last_spec()
+    assert len(spec.inputs) == 1
+    rewrites += einsum_rewrites_sum(spec, 0)
+    if len(rewrites) > 0:
+        spec = last_spec()
+    assert len(rewrites) == 0 or spec == last_spec()
+    assert einsum_is_identity_spec(spec) 
     return rewrites
