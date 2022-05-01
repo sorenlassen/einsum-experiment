@@ -70,6 +70,14 @@ class EinsumSpec:
     # output is an instance of EinsumOutputSpec
     output: EinsumOutputSpec
 
+    def is_identity(self):
+        if len(self.inputs) != 1:
+            return False
+        if self.inputs[0].idxs != self.output.idxs:
+            return False
+        assert self.inputs[0].shape == self.output.shape
+        return True
+
 EINSUM_LETTERS_UPPER = string.ascii_uppercase # A-Z
 EINSUM_LETTERS_LOWER = string.ascii_lowercase # a-z
 EINSUM_LETTERS = EINSUM_LETTERS_UPPER + EINSUM_LETTERS_LOWER # A-Za-z

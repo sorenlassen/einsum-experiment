@@ -123,6 +123,14 @@ class TestCase(unittest.TestCase):
         self.eq(ES({},[EIS((),[])],EOS((),[])), einsum_spec("...->...", [()]))
         self.fails(lambda: einsum_spec("->->", [()]))
 
+    def test_is_identity(self):
+        self.assertTrue(einsum_spec("", [()]).is_identity())
+        self.assertTrue(einsum_spec("->", [()]).is_identity())
+        self.assertTrue(einsum_spec("...->...", [()]).is_identity())
+        self.assertTrue(einsum_spec("...->...", [(2,3,4)]).is_identity())
+        self.assertTrue(einsum_spec("...i->i...", [(2,)]).is_identity())
+        self.assertFalse(einsum_spec("...i->i...", [(2,2)]).is_identity())
+
     def test_einsum_squeeze_input_spec(self):
         shapes = [ (), (0,), (1,), (2,), (1,1), (1,2), (2,1), (1,2,1), (2,1,2) ]
         for shape in shapes:
