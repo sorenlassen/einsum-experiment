@@ -75,7 +75,8 @@ EINSUM_LETTERS_LOWER = string.ascii_lowercase # a-z
 EINSUM_LETTERS = EINSUM_LETTERS_UPPER + EINSUM_LETTERS_LOWER # A-Za-z
 
 def einsum_index(letter: str) -> int:
-    assert letter in EINSUM_LETTERS, f"index '{letter}' ({ord(letter)}) is not a valid einsum letter"
+    assert letter in EINSUM_LETTERS, \
+            "index '%s' (\\u%04X) is not a valid einsum letter" % (letter, ord(letter))
     return EINSUM_LETTERS.index(letter)
 
 def einsum_letter(idx: int) -> str:
