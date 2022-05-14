@@ -1,5 +1,5 @@
 import unittest
-from typing import Any, Optional
+from typing import Any
 
 from einsum import *
 
@@ -10,6 +10,10 @@ class TestCase(unittest.TestCase):
             self.assertRaises(AssertionError, fn, *args, **kwargs)
 
         def expect(expected, result: Any = True, msg: Optional[str] = None):
+            if isinstance(expected, list):
+                expected = tuple(expected)
+            if isinstance(result, list):
+                result = tuple(result)
             self.assertEqual(expected, result, msg=msg)
 
         EIS = EinsumInputSpec
@@ -103,20 +107,20 @@ class TestCase(unittest.TestCase):
         fails(lambda: einsum_output({}, [], "......"))
         fails(lambda: einsum_output({8:2}, [EIS((2,),[8],[])], "II"))
 
-        expect(ES({},[EIS((),[],[])],EOS((),[])), einsum_spec("", [()]))
-        expect(ES({},[EIS((),[],[])],EOS((),[])), einsum_spec("->", [()]))
-        expect(ES({},[EIS((),[],[])],EOS((),[])), einsum_spec("...->...", [()]))
+        expect(ES([EIS((),[],[])],EOS((),[])), einsum_spec("", [()]))
+        expect(ES([EIS((),[],[])],EOS((),[])), einsum_spec("->", [()]))
+        expect(ES([EIS((),[],[])],EOS((),[])), einsum_spec("...->...", [()]))
         fails(lambda: einsum_spec("->->", [()]))
 
         eqT = np.array_equal
         t_0 = einsum_tensor(0.)
         t0_0 = einsum_tensor([])
         t1_0 = einsum_tensor([0.])
-        expect(eqT(t_0, einsum_execute(ES({},[EIS((),[],[])],EOS((),[])),[t_0])))
-        expect(eqT(t_0, einsum_execute(ES({8:0},[EIS((0,),[8],[])],EOS((),[])),[t0_0])))
-        expect(eqT(t0_0, einsum_execute(ES({8:0},[EIS((0,),[8],[])],EOS((0,),[8])),[t0_0])))
-        expect(eqT(t_0, einsum_execute(ES({8:1},[EIS((1,),[8],[])],EOS((),[])),[t1_0])))
-        expect(eqT(t1_0, einsum_execute(ES({8:1},[EIS((1,),[8],[])],EOS((1,),[8])),[t1_0])))
+        expect(eqT(t_0, einsum_execute(ES([EIS((),[],[])],EOS((),[])),[t_0])))
+        expect(eqT(t_0, einsum_execute(ES([EIS((0,),[8],[])],EOS((),[])),[t0_0])))
+        expect(eqT(t0_0, einsum_execute(ES([EIS((0,),[8],[])],EOS((0,),[8])),[t0_0])))
+        expect(eqT(t_0, einsum_execute(ES([EIS((1,),[8],[])],EOS((),[])),[t1_0])))
+        expect(eqT(t1_0, einsum_execute(ES([EIS((1,),[8],[])],EOS((1,),[8])),[t1_0])))
 
         expect(eqT(t_0, einsum("->",[t_0])))
         expect(eqT(t_0, einsum("I->",[t0_0])))

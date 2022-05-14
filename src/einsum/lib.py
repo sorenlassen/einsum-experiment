@@ -1,14 +1,28 @@
 from dataclasses import dataclass
-from typing import List, Tuple, Dict, Optional, Callable
+from typing import List, Tuple, Dict, Optional, Union, Callable, Collection, Type, TYPE_CHECKING
 import math
 import numpy as np
 import string
+import functools
 
-Shape = Tuple[int,...]
-Idxs = List[int]
+Shape = Tuple[int, ...]
+Idxs = Tuple[int, ...]
+ShapeLike = Union[Shape, Collection[int]]
+IdxsLike = Union[Idxs, Collection[int]]
 IdxsMap = Dict[int,int]
 Tensor = np.ndarray
 
+
+memoize = functools.lru_cache(maxsize=None)
+
+def _cast(self, field: str, type: Type):
+    object.__setattr__(self, field, type(getattr(self, field)))
+
+def _ensure_tuples(*fields: str):
+    def __post_init__(self):
+        for field in fields:
+            _cast(self, field, tuple)
+    return __post_init__
 
 def einsum_tensor(x) -> Tensor:
     return np.array(x)
@@ -31,8 +45,13 @@ def einsum_tensor_frompos(fn: Callable[..., float], shape: Shape) -> Tensor:
    return einsum_tensor(recurse([], shape))
 
 
-@dataclass
+@dataclass(frozen=True)
 class EinsumOutputSpec:
+    if TYPE_CHECKING:
+        def __init__(self, shape: ShapeLike, idxs: IdxsLike):
+            ...
+    __post_init__ = _ensure_tuples('shape', 'idxs')
+
 
     # tuple of magnitudes (non-negative integers)
     shape: Shape
@@ -42,8 +61,12 @@ class EinsumOutputSpec:
     # consecutive negative indices representing ellipsis
     idxs: Idxs
 
-@dataclass
+@dataclass(frozen=True)
 class EinsumInputSpec:
+    if TYPE_CHECKING:
+        def __init__(self, shape: ShapeLike, leading_idxs: IdxsLike, trailing_idxs: IdxsLike):
+            ...
+    __post_init__ = _ensure_tuples('shape', 'leading_idxs', 'trailing_idxs')
 
     # tuple of magnitudes
     shape: Shape
@@ -62,18 +85,29 @@ class EinsumInputSpec:
         end = len(self.shape) - len(self.trailing_idxs)
         return self.shape[begin:end]
 
-@dataclass
+    @property
+    def idxs(self) -> Idxs:
+        return einsum_input_idxs(self)
+
+@dataclass(frozen=True)
 class EinsumSpec:
+    __post_init__ = _ensure_tuples('inputs')
+    if TYPE_CHECKING:
+        def __init__(self, inputs: Collection[EinsumInputSpec], outputs: EinsumOutputSpec):
+            ...
 
     # idxs_map maps indices to magnitudes, where an index
     #   is an integer with [0,52) ranging over upper and lower case letters
     #   (e.g. A and Z are 0 and 25, a and z are 26 and 51) and with
     #   negative integers ranging over the indices of the ellipsis, if any
     #   (-1 is the last index of the ellipsis, -2 is the second last, etc)
-    idxs_map: IdxsMap
+    @property
+    @memoize
+    def idxs_map(self) -> IdxsMap:
+        return einsum_idxs_map(self.inputs)
 
     # inputs is a non-empty list of instances of EinsumInputSpec
-    inputs: List[EinsumInputSpec]
+    inputs: Tuple[EinsumInputSpec]
 
     # output is an instance of EinsumOutputSpec
     output: EinsumOutputSpec
@@ -91,11 +125,11 @@ def einsum_letter(idx: int) -> str:
     return EINSUM_LETTERS[idx]
 
 def einsum_idxs(formula: str) -> Idxs:
-    return [ einsum_index(letter) for letter in formula ]
+    return tuple([ einsum_index(letter) for letter in formula ])
 
 def einsum_infer_output_formula(
         idxs_map: IdxsMap,
-        ispecs: List[EinsumInputSpec]) -> str:
+        ispecs: Collection[EinsumInputSpec]) -> str:
     # count occurrences of letter indices in inputs
     idxs_count = [0] * len(EINSUM_LETTERS)
     for spec in ispecs:
@@ -117,11 +151,11 @@ def einsum_find_duplicate(letters: str) -> Optional[str]:
     return None
 
 def einsum_ellipsis_idxs(idxs_map: IdxsMap) -> Idxs:
-    return sorted([ idx for idx in idxs_map if idx < 0 ])
+    return tuple(sorted([ idx for idx in idxs_map if idx < 0 ]))
 
 def einsum_output(
         idxs_map: IdxsMap,
-        ispecs: List[EinsumInputSpec],
+        ispecs: Collection[EinsumInputSpec],
         formula: Optional[str]) \
         -> EinsumOutputSpec:
     if formula is None:
@@ -168,7 +202,7 @@ def einsum_extend_idxs_map(idxs_map: IdxsMap, idx: int, n: int) -> IdxsMap:
         assert n == 1 or n == old, f"cannot unify magnitudes {old}, {n}"
     return idxs_map
 
-def einsum_idxs_map(ispecs: List[EinsumInputSpec]) -> IdxsMap:
+def einsum_idxs_map(ispecs: Collection[EinsumInputSpec]) -> IdxsMap:
     idxs_map: IdxsMap = {}
 
     for spec in ispecs:
@@ -199,15 +233,15 @@ def einsum_spec(equation: str, ishapes: List[Shape]) -> EinsumSpec:
     oformula = io[1] if len(io) == 2 else None
     iformulas = io[0].split(",")
     assert len(iformulas) == len(ishapes), "# equation inputs != # input shapes"
-    ispecs = [ einsum_input(*p) for p in zip(iformulas, ishapes) ]
+    ispecs = tuple([ einsum_input(*p) for p in zip(iformulas, ishapes) ])
     idxs_map = einsum_idxs_map(ispecs)
     ospec = einsum_output(idxs_map, ispecs, oformula)
-    return EinsumSpec(idxs_map, ispecs, ospec)
+    return EinsumSpec(ispecs, ospec)
 
-def einsum_input_idxs(input_spec: EinsumInputSpec):
+def einsum_input_idxs(input_spec: EinsumInputSpec) -> Idxs:
     count = len(input_spec.leading_idxs) + len(input_spec.trailing_idxs)
     assert count <= len(input_spec.shape)
-    ellipsis = list(range(count - len(input_spec.shape), 0))
+    ellipsis = tuple(list(range(count - len(input_spec.shape), 0)))
     idxs = input_spec.leading_idxs + ellipsis + input_spec.trailing_idxs
     assert len(idxs) == len(input_spec.shape)
     return idxs
@@ -218,18 +252,16 @@ def einsum_execute(spec: EinsumSpec, tensors: List[Tensor]) -> Tensor:
     for input_spec, tensor in zip(spec.inputs, tensors):
         assert input_spec.shape == tensor.shape
 
-    in_idxs = list(map(einsum_input_idxs, spec.inputs))
-    out_idxs = spec.output.idxs
-    in_only_idxs = list(set(spec.idxs_map).difference(out_idxs))
+    in_only_idxs = tuple(list(set(spec.idxs_map).difference(spec.output.idxs)))
     def fn(*opos) -> float:
-        assert len(opos) == len(out_idxs)
-        pos_map = dict(zip(out_idxs, opos))
+        assert len(opos) == len(spec.output.idxs)
+        pos_map = dict(zip(spec.output.idxs, opos))
 
         def recurse(remaining_idxs: Idxs) -> float:
             if len(remaining_idxs) == 0:
                 prod = 1.
-                for idxs, tensor in zip(in_idxs, tensors):
-                    pos = [ pos_map[idx] for idx in idxs ]
+                for input, tensor in zip(spec.inputs, tensors):
+                    pos = [ pos_map[idx] for idx in input.idxs ]
                     prod *= tensor.item(*pos)
                 return prod
             else:
