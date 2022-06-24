@@ -135,9 +135,9 @@ def einsum_output(
         lst = [ s.replace(" ", "") for s in subscripts.split("...") ]
         assert 1 <= len(lst) <= 2, f"multiple ellipses in '{subscripts}'"
 
-        # following torch and onnx, we don't require that the output has
+        # following torch, we don't require that the output has
         # an ellipsis even if any appears in the inputs, whereas to follow
-        # numpy we'd require:
+        # numpy and tensorflow and onnx we'd require:
         #
         #   if einsum_ellipsis_idxs(idxs_map) != []: assert len(lst) == 2
 
