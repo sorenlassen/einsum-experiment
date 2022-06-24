@@ -174,7 +174,7 @@ def einsum_input(subscripts: str, shape: Shape) -> EinsumInputSpec:
     # occurrences of a subscript index within the same operand
     for idx, dim in zip(idxs, shape):
         assert dim == shape[idxs.index(idx)], \
-                f"operand has repeated subscript {einsum_letter(idx)} with different shape sizes"
+            f"operand has repeated subscript {einsum_letter(idx)} with different shape sizes"
     return EinsumInputSpec(shape, idxs)
 
 def einsum_extend_idxs_map(idxs_map: IdxsMap, idx: int, n: int) -> IdxsMap:
@@ -220,7 +220,7 @@ def einsum_execute(spec: EinsumSpec, tensors: List[Tensor]) -> Tensor:
     for input_spec, tensor in zip(inputs, tensors):
         assert input_spec.shape == tensor.shape
 
-    # squeeze inputs to avoid multiplying over axes of length 1 which
+    # squeeze inputs to avoid multiplying over axes of length 1
     # which may, through broadcast, have different length in idxs_map
     inputs = list(map(einsum_squeeze_input_spec, inputs))
     tensors = [tensor.squeeze() for tensor in tensors]
