@@ -97,6 +97,10 @@ class TestCase(unittest.TestCase):
         self.eq("...I", einsum_infer_output_subscripts({-1:3,8:2}, [EIS((2,3),[8,-1])]))
         self.eq("...", einsum_infer_output_subscripts({8:2}, [EIS((2,2),[8,8])]))
         self.eq("...", einsum_infer_output_subscripts({8:2}, [EIS((2,),[8]), EIS((2,),[8])]))
+        # subscripts should be sorted alphabetically:
+        self.eq("...IJ", einsum_infer_output_subscripts({8:2,9:3}, [EIS((2,),[8]), EIS((3,),[9])]))
+        self.eq("...Ba", einsum_infer_output_subscripts({26:2,1:3}, [EIS((2,),[26]), EIS((3,),[1])]))
+        self.eq("...AIJ", einsum_infer_output_subscripts({9:2,8:3,0:4}, [EIS((2,),[9]), EIS((3,4),[8,0])]))
 
     def test_einsum_output(self):
         self.eq(EOS((),[]), einsum_output({}, [], ""))

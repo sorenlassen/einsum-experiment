@@ -104,7 +104,7 @@ def einsum_infer_output_subscripts(
             if idx >= 0:
                 idxs_count[idx] += 1
     subscripts = "..."
-    for idx in idxs_map:
+    for idx in sorted(idxs_map):
         if idxs_count[idx] == 1:
             subscripts += einsum_letter(idx)
     return subscripts
